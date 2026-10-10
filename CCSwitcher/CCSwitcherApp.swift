@@ -15,6 +15,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // App starts as agent/accessory due to LSUIElement
     }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // Session parse cache saves are throttled, so write whatever is
+        // still pending before exiting. The save runs on the cache actor,
+        // off the main thread; termination resumes once it finishes.
+        Task {
+            await SessionParseCacheV2.shared.flush()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
 }
 
 @main
