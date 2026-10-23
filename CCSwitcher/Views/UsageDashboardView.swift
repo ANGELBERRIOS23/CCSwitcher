@@ -298,6 +298,12 @@ struct UsageDashboardView: View {
             if let sub = account.displaySubscriptionType {
                 Badge(text: sub, color: Theme.glow)
             }
+
+            if !account.isActive {
+                Button("Switch") { Task { await appState.switchTo(account) } }
+                    .buttonStyle(PrimaryButtonStyle(height: 24))
+                    .focusable(false)
+            }
         }
     }
 

@@ -286,6 +286,8 @@ struct PrimaryButtonStyle: ButtonStyle {
         configuration.label
             .font(.system(.subheadline, design: .rounded).weight(.semibold))
             .foregroundStyle(.white)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 14)
             .frame(minHeight: height)
             .background(
