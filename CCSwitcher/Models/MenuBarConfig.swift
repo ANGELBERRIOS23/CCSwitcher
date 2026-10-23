@@ -173,19 +173,21 @@ final class MenuBarConfig: ObservableObject {
         }
     }
 
-    /// The built-in palettes, kept verbatim from before the colors were
-    /// configurable. `.menuBar` is monochrome on purpose: it has to adapt to a
-    /// light or dark menu bar, which no fixed hex can do.
+    /// The built-in palettes. `.menuBar` is kept verbatim from before the colors
+    /// were configurable and is monochrome on purpose: it has to adapt to a
+    /// light or dark menu bar, which no fixed hex can do. `.dashboard` follows
+    /// the popover's Claude palette.
     private static func stockColor(utilization: Double?, context: LimitBarContext) -> Color {
         switch context {
         case .menuBar:
             guard let utilization, utilization > 90 else { return .primary }
             return .red
         case .dashboard:
+            // Claude palette: terracotta, warming to amber, then red near the limit.
             let pct = utilization ?? 0
-            if pct >= 90 { return .red }
-            if pct >= 60 { return .orange }
-            return .green
+            if pct >= 90 { return Theme.danger }
+            if pct >= 60 { return Theme.warning }
+            return .brand
         }
     }
 

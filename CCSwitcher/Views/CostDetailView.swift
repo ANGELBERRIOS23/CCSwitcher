@@ -6,14 +6,17 @@ struct CostDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: 12) {
                 todayCard
                 periodSummaryCards
                 dailyHistorySection
                 pricingInfoSection
             }
-            .padding(.vertical, 12)
+            .padding(.horizontal, Theme.pad)
+            .padding(.top, 6)
+            .padding(.bottom, 12)
         }
+        .scrollIndicators(.never)
     }
 
     // MARK: - Summary Cards
@@ -22,52 +25,56 @@ struct CostDetailView: View {
         let summary = appState.costSummary
         let today = summary.dailyCosts.first(where: { $0.date == todayString() })
 
-        return VStack(spacing: 8) {
+        return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Today")
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(.textSecondary)
+                    .foregroundStyle(Theme.dim)
                 Spacer()
                 Text(todayDisplayDate())
-                    .font(.caption2)
-                    .foregroundStyle(.textSecondary)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(Theme.dim)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Theme.well))
             }
 
             Text(formatCost(summary.todayCost))
-                .font(.system(size: 36, weight: .semibold, design: .rounded))
+                .font(.system(size: 38, weight: .semibold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(.green)
+                .contentTransition(.numericText(value: summary.todayCost))
+                .animation(Theme.spring, value: summary.todayCost)
 
             if let today, !today.modelBreakdown.isEmpty {
-                Divider()
-                VStack(spacing: 4) {
+                let total = max(today.totalCost, 0.000_001)
+                VStack(spacing: 8) {
                     ForEach(today.modelBreakdown.sorted(by: { $0.value > $1.value }), id: \.key) { model, cost in
-                        HStack {
-                            Text(model)
-                                .font(.caption2)
-                                .foregroundStyle(.textSecondary)
-                            Spacer()
-                            Text(formatCost(cost))
-                                .font(.caption2.weight(.medium).monospacedDigit())
-                                .foregroundStyle(.textSecondary)
+                        VStack(spacing: 4) {
+                            HStack {
+                                Text(model)
+                                    .font(.caption2)
+                                    .foregroundStyle(Theme.dim)
+                                Spacer()
+                                Text(formatCost(cost))
+                                    .font(.caption2.weight(.semibold).monospacedDigit())
+                            }
+                            GlowBar(fraction: cost / total, color: Theme.glow, height: 5)
                         }
                     }
                 }
+                .padding(.top, 2)
 
                 HStack {
                     Label("\(today.sessionCount) sessions", systemImage: "terminal")
-                        .font(.caption2)
-                        .foregroundStyle(.textSecondary)
                     Spacer()
                     Text("\(formatTokenCount(today.totalTokens)) tokens")
-                        .font(.caption2)
-                        .foregroundStyle(.textSecondary)
                 }
+                .font(.caption2)
+                .foregroundStyle(Theme.dim)
                 .padding(.top, 2)
             }
         }
-        .cardStyle()
-        .sectionPadding()
+        .card(padding: 14)
     }
 
     private var periodSummaryCards: some View {
@@ -79,24 +86,31 @@ struct CostDetailView: View {
         let last7 = costForLastDays(7, costs: costs, today: todayStr, formatter: formatter)
         let last30 = costForLastDays(30, costs: costs, today: todayStr, formatter: formatter)
 
-        return HStack(spacing: 10) {
-            periodCard(title: "Last 7 Days", cost: last7)
-            periodCard(title: "Last 30 Days", cost: last30)
+        return HStack(spacing: 8) {
+            periodCard(title: "Last 7 Days", icon: "calendar", cost: last7)
+            periodCard(title: "Last 30 Days", icon: "calendar.badge.clock", cost: last30)
         }
-        .padding(.horizontal, 16)
     }
 
-    private func periodCard(title: LocalizedStringKey, cost: Double) -> some View {
-        VStack(spacing: 4) {
+    private func periodCard(title: LocalizedStringKey, icon: String, cost: Double) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Image(systemName: icon)
+                .font(.system(size: 15))
+                .foregroundStyle(Theme.glow)
+            Spacer(minLength: 8)
+            Text(formatCost(cost))
+                .font(.system(size: 18, weight: .semibold, design: .rounded).monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .contentTransition(.numericText(value: cost))
+                .animation(Theme.spring, value: cost)
             Text(title)
                 .font(.caption2)
-                .foregroundStyle(.textSecondary)
-            Text(formatCost(cost))
-                .font(.title3.weight(.semibold).monospacedDigit())
-                .foregroundStyle(.primary)
+                .foregroundStyle(Theme.dim)
         }
-        .frame(maxWidth: .infinity)
-        .cardStyle()
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 80, alignment: .leading)
+        .surface()
     }
 
     private func costForLastDays(_ days: Int, costs: [DailyCost], today: String, formatter: DateFormatter) -> Double {
@@ -113,35 +127,29 @@ struct CostDetailView: View {
         let maxCost = costs.map(\.totalCost).max() ?? 1
 
         return VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Daily History")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.textSecondary)
-                Spacer()
-                Text("Total: \(formatCost(appState.costSummary.totalCost))")
-                    .font(.caption2.weight(.medium).monospacedDigit())
-                    .foregroundStyle(.textSecondary)
-            }
-            .padding(.horizontal, 16)
+            SectionLabel(title: "Daily History", trailing: String(localized: "Total: \(formatCost(appState.costSummary.totalCost))", bundle: L10n.bundle))
+                .padding(.top, 4)
 
             if costs.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "dollarsign.circle")
-                        .font(.system(size: 32))
-                        .foregroundStyle(.textSecondary)
+                        .font(.system(size: 28, weight: .light))
+                        .foregroundStyle(Theme.glow)
                     Text("No cost data available")
                         .font(.subheadline)
-                        .foregroundStyle(.textSecondary)
+                        .foregroundStyle(Theme.dim)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 24)
+                .surface()
             } else {
-                VStack(spacing: 1) {
+                VStack(spacing: 2) {
                     ForEach(costs) { day in
                         dailyRow(day: day, maxCost: maxCost)
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(6)
+                .surface()
             }
         }
     }
@@ -153,66 +161,58 @@ struct CostDetailView: View {
         return HStack(spacing: 8) {
             Text(shortDate(day.date))
                 .font(.caption2.monospacedDigit())
-                .foregroundStyle(isToday ? .brand : .secondary)
-                .frame(width: 40, alignment: .leading)
+                .foregroundStyle(isToday ? Theme.glow : Theme.dim)
+                .frame(width: 36, alignment: .leading)
 
             Text(formatCost(day.totalCost))
-                .font(.caption2.weight(.medium).monospacedDigit())
-                .foregroundStyle(isToday ? .brand : .primary)
+                .font(.caption2.weight(.semibold).monospacedDigit())
+                .foregroundStyle(isToday ? Theme.glow : Theme.text)
                 .frame(width: 56, alignment: .trailing)
 
-            GeometryReader { geo in
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(isToday ? Color.brand : Color.blue.opacity(0.6))
-                    .frame(width: max(2, geo.size.width * barRatio), height: 8)
-            }
-            .frame(height: 8)
+            GlowBar(fraction: barRatio, color: isToday ? Theme.glow : Theme.glow.opacity(0.55), height: 6)
 
             // Compact model breakdown
             Text(day.modelBreakdown.keys.sorted().joined(separator: ", "))
-                .font(.system(size: 8))
-                .foregroundStyle(.textSecondary)
+                .font(.system(size: 8.5))
+                .foregroundStyle(Theme.dim)
                 .frame(width: 50, alignment: .trailing)
                 .lineLimit(1)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 5)
         .padding(.horizontal, 8)
-        .background(isToday ? .cardFillStrong : .clear)
-        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(isToday ? Theme.accent.opacity(0.12) : .clear)
+        )
     }
 
     // MARK: - Pricing Info
 
     private var pricingInfoSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("How We Calculate")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.textSecondary)
-                Spacer()
-            }
-            .padding(.horizontal, 16)
+            SectionLabel(title: "How We Calculate")
+                .padding(.top, 4)
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("Cost is computed from your local Claude Code session logs (jsonl files) under ~/.claude/projects/.")
                     .font(.caption2)
-                    .foregroundStyle(.textSecondary)
+                    .foregroundStyle(Theme.dim)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if let v = VerifiedAgainst.load() {
-                    HStack(spacing: 6) {
+                    HStack(alignment: .top, spacing: 6) {
                         Image(systemName: "checkmark.seal.fill")
                             .font(.caption2)
-                            .foregroundStyle(.green)
+                            .foregroundStyle(Theme.success)
                         Text("Verified against ccusage \(v.ccusageVersion) on \(v.verifiedOn) — \(v.windowDays)-day total matched to the cent.")
                             .font(.caption2)
-                            .foregroundStyle(.textSecondary)
+                            .foregroundStyle(Theme.dim)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
-            .cardStyle()
-            .sectionPadding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .card(padding: 12)
         }
     }
 
