@@ -2,19 +2,18 @@ import AppKit
 import Combine
 import SwiftUI
 
-/// Owns the menu-bar `NSStatusItem` and its click-through `NSPopover`.
+/// Owns the menu-bar `NSStatusItem` and its floating panel (see `PopoverController`).
 ///
 /// We use `NSStatusItem` directly instead of SwiftUI's `MenuBarExtra` because
 /// `MenuBarExtra`'s label is constrained to a single menu-bar-height element
 /// and clips taller / multi-element content. Hosting a SwiftUI view inside the
 /// status item's button (the pattern iStats / Stats use) lifts that limit.
 @MainActor
-final class StatusItemController: NSObject, NSPopoverDelegate {
+final class StatusItemController: NSObject {
     private var statusItem: NSStatusItem?
-    private var popover: NSPopover?
+    private var popover: PopoverController?
     // Strongly retained: NSHostingController drives the SwiftUI update loop.
     private var stripController: NSHostingController<AnyView>?
-    private var popoverController: NSHostingController<AnyView>?
     private var appState: AppState?
     private var menuBarConfig: MenuBarConfig?
     private var currentLocale: Locale = .autoupdatingCurrent
@@ -61,28 +60,15 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             ])
             button.target = self
             button.action = #selector(togglePopover(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
 
-        let popover = NSPopover()
-        popover.behavior = .transient
-        popover.animates = false
-        let popoverController = NSHostingController(
-            rootView: AnyView(
-                MainMenuView()
-                    .environmentObject(appState)
-                    .environmentObject(config)
-                    .environment(\.locale, locale)
-            )
+        self.popover = PopoverController(
+            appState: appState,
+            config: config,
+            locale: locale,
+            statusItem: statusItem
         )
-        if #available(macOS 13.0, *) {
-            popoverController.sizingOptions = [.preferredContentSize]
-        } else {
-            popoverController.preferredContentSize = NSSize(width: 360, height: 520)
-        }
-        popover.contentViewController = popoverController
-        popover.delegate = self
-        self.popover = popover
-        self.popoverController = popoverController
     }
 
     /// Update the locale environment on all hosted SwiftUI views.
@@ -91,22 +77,49 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         currentLocale = locale
         guard let appState, let config = menuBarConfig else { return }
         stripController?.rootView = makeStripView(appState: appState, config: config, locale: locale)
-        popoverController?.rootView = AnyView(
-            MainMenuView()
-                .environmentObject(appState)
-                .environmentObject(config)
-                .environment(\.locale, locale)
-        )
+        popover?.updateRoot(appState: appState, config: config, locale: locale)
     }
 
     @objc private func togglePopover(_ sender: NSStatusBarButton) {
-        guard let popover else { return }
-        if popover.isShown {
-            popover.performClose(sender)
+        if NSApp.currentEvent?.type == .rightMouseUp {
+            popover?.hide()
+            showContextMenu()
         } else {
-            popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
-            popover.contentViewController?.view.window?.makeKey()
+            popover?.toggle()
         }
+    }
+
+    /// Right-click menu on the status item: quick actions without opening the panel.
+    private func showContextMenu() {
+        guard let statusItem else { return }
+        let menu = NSMenu()
+        menu.addItem(menuItem(String(localized: "Refresh", bundle: L10n.bundle), #selector(refreshFromMenu), key: "r"))
+        menu.addItem(menuItem(String(localized: "Settings", bundle: L10n.bundle), #selector(openSettingsFromMenu), key: ","))
+        menu.addItem(.separator())
+        menu.addItem(menuItem(String(localized: "Quit CCSwitcher", bundle: L10n.bundle), #selector(quitFromMenu), key: "q"))
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil
+    }
+
+    private func menuItem(_ title: String, _ action: Selector, key: String) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+        item.target = self
+        return item
+    }
+
+    @objc private func refreshFromMenu() {
+        guard let appState else { return }
+        Task { await appState.refresh() }
+    }
+
+    @objc private func openSettingsFromMenu() {
+        NSApp.activate(ignoringOtherApps: true)
+        NotificationCenter.default.post(name: .ccswitcherOpenSettings, object: nil)
+    }
+
+    @objc private func quitFromMenu() {
+        NSApplication.shared.terminate(nil)
     }
 
     private func makeStripView(appState: AppState, config: MenuBarConfig, locale: Locale) -> AnyView {

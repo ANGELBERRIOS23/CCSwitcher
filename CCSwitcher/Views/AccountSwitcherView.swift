@@ -8,27 +8,44 @@ struct AccountSwitcherView: View {
     @State private var editingAccountId: UUID?
     @State private var editingLabel = ""
 
-    @Environment(\.colorScheme) private var colorScheme
-
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(spacing: 12) {
+                VStack(spacing: 8) {
                     if appState.accounts.isEmpty {
                         emptyState
                     } else {
                         ForEach(appState.accounts) { account in
-                            accountRow(account)
+                            AccountRow(
+                                account: account,
+                                showFullEmail: showFullEmail,
+                                isEditing: editingAccountId == account.id,
+                                editingLabel: $editingLabel,
+                                onBeginEdit: {
+                                    editingLabel = account.customLabel ?? ""
+                                    withAnimation(Theme.ease) { editingAccountId = account.id }
+                                },
+                                onCommitEdit: { commitLabelEdit(account) },
+                                onCancelEdit: { withAnimation(Theme.ease) { editingAccountId = nil } },
+                                onSwitch: { Task { await appState.switchTo(account) } },
+                                onReauth: { Task { await appState.reauthenticateAccount(account) } },
+                                onRemove: { appState.removeAccount(account) }
+                            )
                         }
                     }
                 }
-                .padding(16)
+                .padding(.horizontal, Theme.pad)
+                .padding(.top, 6)
+                .padding(.bottom, 8)
             }
+            .scrollIndicators(.never)
 
             addAccountButtons
-                .padding(.horizontal, 16)
+                .padding(.horizontal, Theme.pad)
                 .padding(.bottom, 12)
-                .padding(.top, 8)
+                .padding(.top, 4)
+                .animation(Theme.ease, value: showingAddConfirm)
+                .animation(Theme.ease, value: appState.isLoggingIn)
         }
     }
 
@@ -37,138 +54,26 @@ struct AccountSwitcherView: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: "person.crop.circle.badge.plus")
-                .font(.system(size: 40))
-                .foregroundStyle(.textSecondary)
+                .font(.system(size: 30, weight: .light))
+                .foregroundStyle(Theme.glow)
+                .frame(width: 64, height: 64)
+                .surface(radius: 32)
 
             Text("No Accounts")
                 .font(.headline)
 
             Text("Add your current Claude Code account to get started.")
                 .font(.caption)
-                .foregroundStyle(.textSecondary)
+                .foregroundStyle(Theme.dim)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
-    }
-
-    // MARK: - Account Row
-
-    private func accountRow(_ account: Account) -> some View {
-        HStack(spacing: 12) {
-            // Provider icon
-            Image(systemName: account.provider.iconName)
-                .font(.title2)
-                .foregroundStyle(account.isActive ? .brand : .secondary)
-                .frame(width: 32, height: 32)
-
-            // Account info
-            VStack(alignment: .leading, spacing: 2) {
-                if editingAccountId == account.id {
-                    HStack(spacing: 4) {
-                        TextField("Custom label", text: $editingLabel)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.subheadline)
-                            .onSubmit { commitLabelEdit(account) }
-
-                        Button {
-                            commitLabelEdit(account)
-                        } label: {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                        }
-                        .buttonStyle(.plain)
-
-                        Button {
-                            editingAccountId = nil
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.textSecondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                } else {
-                    HStack(spacing: 6) {
-                        Text(account.effectiveDisplayName(obfuscated: !showFullEmail))
-                            .font(.subheadline.weight(.medium))
-
-                        Button {
-                            editingLabel = account.customLabel ?? ""
-                            editingAccountId = account.id
-                        } label: {
-                            Image(systemName: "pencil")
-                                .font(.caption2)
-                                .foregroundStyle(.textSecondary)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Edit label")
-
-                        if account.isActive {
-                            Badge(text: String(localized: "Active", bundle: L10n.bundle), color: .green)
-                        }
-                    }
-                }
-
-                Text(account.displayEmail(obfuscated: !showFullEmail))
-                    .font(.caption)
-                    .foregroundStyle(.textSecondary)
-
-                HStack(spacing: 8) {
-                    if let sub = account.displaySubscriptionType {
-                        Label(sub, systemImage: "creditcard")
-                            .font(.caption2)
-                            .foregroundStyle(.textSecondary)
-                    }
-                    Text(account.provider.rawValue)
-                        .font(.caption2)
-                        .foregroundStyle(.textSecondary)
-                }
-            }
-
-            Spacer()
-
-            // Actions
-            if !account.isActive {
-                Button("Switch") {
-                    Task { await appState.switchTo(account) }
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .tint(.brand)
-            }
-
-            Button {
-                Task { await appState.reauthenticateAccount(account) }
-            } label: {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            }
-            .buttonStyle(.plain)
-            .help("Re-authenticate (fix stale token)")
-
-            Button {
-                appState.removeAccount(account)
-            } label: {
-                Image(systemName: "trash")
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-            .buttonStyle(.plain)
-            .help("Remove account")
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(account.isActive ? .cardFillStrong : .clear)
-                .strokeBorder(.cardBorder, lineWidth: 1)
-                .shadow(color: AppStyle.cardShadowColor, radius: AppStyle.cardShadowRadius, x: 0, y: AppStyle.cardShadowY)
-        )
+        .padding(.vertical, 36)
     }
 
     private func commitLabelEdit(_ account: Account) {
         appState.updateAccountLabel(account, label: editingLabel)
-        editingAccountId = nil
+        withAnimation(Theme.ease) { editingAccountId = nil }
     }
 
     // MARK: - Add Account Buttons
@@ -181,52 +86,39 @@ struct AccountSwitcherView: View {
                 ProgressView()
                     .controlSize(.small)
                 Text("Waiting for browser login...")
-                    .font(.caption)
-                    .foregroundStyle(.textSecondary)
+                    .font(.caption.weight(.medium))
                 Text("Complete the login in your browser, then return here.")
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Theme.dim)
                     .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(.cardFillStrong)
-                    .strokeBorder(.cardBorder, lineWidth: 1)
-                    .shadow(color: AppStyle.cardShadowColor, radius: AppStyle.cardShadowRadius, x: 0, y: AppStyle.cardShadowY)
-            )
+            .card(padding: 14)
+            .transition(.opacity.combined(with: .scale(scale: 0.97)))
         } else if showingAddConfirm {
             // Inline confirmation for "Add Current"
-            VStack(spacing: 8) {
+            VStack(spacing: 10) {
                 Text("This will capture the currently logged-in Claude Code account.")
                     .font(.caption)
-                    .foregroundStyle(.textSecondary)
+                    .foregroundStyle(Theme.dim)
                     .multilineTextAlignment(.center)
 
-                HStack(spacing: 12) {
+                HStack(spacing: 8) {
                     Button("Cancel") {
-                        withAnimation { showingAddConfirm = false }
+                        showingAddConfirm = false
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(SecondaryButtonStyle())
 
                     Button("Add Account") {
                         showingAddConfirm = false
                         Task { await appState.addAccount() }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.brand)
-                    .controlSize(.small)
+                    .buttonStyle(PrimaryButtonStyle(height: 32))
                 }
             }
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(.cardFillStrong)
-                    .strokeBorder(.cardBorder, lineWidth: 1)
-                    .shadow(color: AppStyle.cardShadowColor, radius: AppStyle.cardShadowRadius, x: 0, y: AppStyle.cardShadowY)
-            )
+            .frame(maxWidth: .infinity)
+            .card(padding: 14)
+            .transition(.opacity.combined(with: .scale(scale: 0.97)))
         } else {
             VStack(spacing: 8) {
                 // Primary: Login new account via browser
@@ -234,35 +126,146 @@ struct AccountSwitcherView: View {
                     Task { await appState.loginNewAccount() }
                 } label: {
                     Label("Login New Account", systemImage: "person.badge.plus")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundColor(AppStyle.buttonTextColor)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PrimaryButtonStyle(height: 38))
+                .focusable(false)
 
                 // Secondary: Capture already-logged-in account
                 Button {
-                    withAnimation { showingAddConfirm = true }
+                    showingAddConfirm = true
                 } label: {
                     Label("Add Current Account", systemImage: "plus.circle")
-                        .font(.caption)
-                        .foregroundStyle(.textSecondary)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .strokeBorder(
-                                    colorScheme == .dark
-                                        ? Color.gray.opacity(0.4)
-                                        : Color.white.opacity(0.22),
-                                    lineWidth: 1
-                                )
-                        )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SecondaryButtonStyle())
+                .focusable(false)
             }
+            .transition(.opacity)
+        }
+    }
+}
+
+// MARK: - Account Row
+
+private struct AccountRow: View {
+    let account: Account
+    let showFullEmail: Bool
+    let isEditing: Bool
+    @Binding var editingLabel: String
+    let onBeginEdit: () -> Void
+    let onCommitEdit: () -> Void
+    let onCancelEdit: () -> Void
+    let onSwitch: () -> Void
+    let onReauth: () -> Void
+    let onRemove: () -> Void
+
+    @State private var hover = false
+    @FocusState private var fieldFocused: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Avatar(name: account.effectiveDisplayName(obfuscated: !showFullEmail),
+                   icon: account.provider.iconName, active: account.isActive, size: 36)
+
+            VStack(alignment: .leading, spacing: 2) {
+                if isEditing {
+                    labelEditor
+                } else {
+                    HStack(spacing: 6) {
+                        Text(account.effectiveDisplayName(obfuscated: !showFullEmail))
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+
+                        Button(action: onBeginEdit) {
+                            Image(systemName: "pencil")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(Theme.dim)
+                        }
+                        .buttonStyle(PressStyle())
+                        .opacity(hover ? 1 : 0)
+                        .help("Edit label")
+
+                        if account.isActive {
+                            Badge(text: String(localized: "Active", bundle: L10n.bundle), color: Theme.success)
+                        }
+                    }
+                }
+
+                Text(account.displayEmail(obfuscated: !showFullEmail))
+                    .font(.caption)
+                    .foregroundStyle(Theme.dim)
+                    .lineLimit(1)
+
+                HStack(spacing: 8) {
+                    if let sub = account.displaySubscriptionType {
+                        Label(sub, systemImage: "creditcard")
+                    }
+                    Text(account.provider.rawValue)
+                }
+                .font(.caption2)
+                .foregroundStyle(Theme.faint)
+            }
+
+            Spacer(minLength: 4)
+
+            // Actions
+            HStack(spacing: 6) {
+                if !account.isActive {
+                    Button("Switch", action: onSwitch)
+                        .buttonStyle(PrimaryButtonStyle(height: 28))
+                        .focusable(false)
+                }
+
+                CircleIconButton(icon: "arrow.triangle.2.circlepath", size: 26, tint: Theme.warning, action: onReauth)
+                    .help("Re-authenticate (fix stale token)")
+
+                CircleIconButton(icon: "trash", size: 26, tint: Theme.danger, action: onRemove)
+                    .help("Remove account")
+            }
+        }
+        .padding(12)
+        .surface(fill: account.isActive ? Theme.accent.opacity(0.10) : (hover ? Theme.cardHover : Theme.card))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.corner, style: .continuous)
+                .strokeBorder(Theme.accent.opacity(account.isActive ? 0.45 : 0), lineWidth: 1)
+        )
+        .contentShape(Rectangle())
+        .onHover { hover = $0 }
+        .animation(.easeOut(duration: 0.15), value: hover)
+        .animation(Theme.ease, value: account.isActive)
+    }
+
+    private var labelEditor: some View {
+        HStack(spacing: 6) {
+            TextField("Custom label", text: $editingLabel)
+                .textFieldStyle(.plain)
+                .font(.subheadline)
+                .focused($fieldFocused)
+                .onSubmit(onCommitEdit)
+                .padding(.horizontal, 8)
+                .frame(height: 24)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(Theme.well)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .strokeBorder(Theme.accent.opacity(fieldFocused ? 0.7 : 0.2), lineWidth: 1)
+                        )
+                )
+                .onAppear { fieldFocused = true }
+
+            Button(action: onCommitEdit) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(Theme.success)
+            }
+            .buttonStyle(PressStyle())
+
+            Button(action: onCancelEdit) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(Theme.dim)
+            }
+            .buttonStyle(PressStyle())
         }
     }
 }
