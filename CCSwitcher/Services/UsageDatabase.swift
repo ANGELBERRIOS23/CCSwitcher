@@ -2,15 +2,16 @@ import Foundation
 import Darwin
 import GRDB
 
+private let log = FileLog("UsageDatabase")
+
 /// Durable usage history. All business writes are transactional and incremental.
 /// Credentials and application preferences deliberately remain outside this database.
 final class UsageDatabase: Sendable {
     enum StorageError: LocalizedError {
-        case newerDatabase, invalidLegacy(String), invalidRecord(String)
+        case newerDatabase, invalidRecord(String)
         var errorDescription: String? {
             switch self {
             case .newerDatabase: return String(localized: "usage_storage_newer", bundle: L10n.bundle)
-            case .invalidLegacy(let reason): return String(format: NSLocalizedString("usage_storage_import_failed", bundle: L10n.bundle, comment: "Usage import failure"), reason)
             case .invalidRecord(let reason): return String(format: NSLocalizedString("usage_storage_write_failed", bundle: L10n.bundle, comment: "Usage write failure"), reason)
             }
         }
@@ -128,7 +129,14 @@ final class UsageDatabase: Sendable {
         // source is absent or empty. Clearing business rows never resurrects it.
         migrator.registerMigration("v2_import_legacy_json_v3") { db in
             guard let legacyURL, FileManager.default.fileExists(atPath: legacyURL.path) else { return }
-            let data = try Data(contentsOf: legacyURL)
+            // An unreadable cache is treated like a missing one: the scan of
+            // the JSONL sources rebuilds what still exists.
+            let data: Data
+            do { data = try Data(contentsOf: legacyURL) }
+            catch {
+                log.warning("Legacy import skipped: cache cannot be read (\(error.localizedDescription))")
+                return
+            }
             try LegacyUsageImportV3.run(data: data, root: root, timezone: timezone, db: db)
         }
         return migrator
@@ -531,15 +539,31 @@ private enum LegacyUsageImportV3 {
     }
 
     static func run(data: Data, root: URL, timezone: TimeZone, db: Database) throws {
+        // The old app discarded a cache it could not decode or whose version
+        // differed, so its user never saw that data. Do the same rather than
+        // failing on every launch; the file stays on disk untouched.
         let envelope: Envelope
         do { envelope = try JSONDecoder().decode(Envelope.self, from: data) }
-        catch { throw UsageDatabase.StorageError.invalidLegacy(error.localizedDescription) }
-        guard envelope.version == 3 else { throw UsageDatabase.StorageError.invalidLegacy("unsupported format version \(envelope.version)") }
-        guard let raw = try JSONSerialization.jsonObject(with: data) as? [String: Any], let rawFiles = raw["files"] as? [String: [String: Any]] else { throw UsageDatabase.StorageError.invalidLegacy("missing files map") }
+        catch {
+            log.warning("Legacy import skipped: cache cannot be decoded (\(error.localizedDescription))")
+            return
+        }
+        guard envelope.version == 3 else {
+            log.warning("Legacy import skipped: unsupported format version \(envelope.version)")
+            return
+        }
+        guard let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let rawFiles = raw["files"] as? [String: [String: Any]] else {
+            log.warning("Legacy import skipped: missing files map")
+            return
+        }
         let stamp = Int64(Date().timeIntervalSince1970 * 1_000_000)
+        var outsideRoot = 0
+        defer { if outsideRoot > 0 { log.warning("Legacy import skipped \(outsideRoot) sources outside \(root.path)") } }
         for (originalPath, file) in envelope.files.sorted(by: { $0.key < $1.key }) {
             let path = canonicalUsageSourceURL(URL(fileURLWithPath: originalPath)).path
-            guard path.hasPrefix(root.path + "/") else { throw UsageDatabase.StorageError.invalidLegacy("source outside the Claude projects directory") }
+            // A renamed home folder leaves sources under another root; the scan
+            // of the current root picks up whichever of those files still exist.
+            guard path.hasPrefix(root.path + "/") else { outsideRoot += 1; continue }
             let relative = String(path.dropFirst(root.path.count + 1))
             let rawFile = rawFiles[originalPath] ?? [:]
             let knownFile: Set<String> = ["entries","activityByDate","mtimeUnix","earliestTimestampUnix","project","sessionId","isSidechain"]

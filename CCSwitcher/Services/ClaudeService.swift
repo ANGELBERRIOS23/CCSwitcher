@@ -562,7 +562,21 @@ final class ClaudeService: @unchecked Sendable {
 
         // Give keychain a moment to sync after CLI writes
         try await Task.sleep(for: .seconds(1))
+        // A Cancel during the delay must still stop the caller from capturing.
+        if lock.withLock({ _loginCancelled }) {
+            log.info("[login] Cancelled during the post-login delay")
+            throw CancellationError()
+        }
         log.info("[login] Post-login delay complete, ready for token capture")
+    }
+
+    /// Start a new login attempt. Called synchronously when the UI enters the
+    /// logging-in state, so a Cancel pressed before the subprocess launches
+    /// is not cleared by the attempt it was meant to stop.
+    func beginLogin() {
+        lock.lock()
+        _loginCancelled = false
+        lock.unlock()
     }
 
     /// Cancel an in-progress `claude auth login` subprocess.
@@ -774,10 +788,17 @@ final class ClaudeService: @unchecked Sendable {
                 }
                 process.environment = env
 
+                // A Cancel that arrived before the process existed must win;
+                // the flag is cleared only by beginLogin(), never here.
                 self?.lock.lock()
-                self?._loginCancelled = false
-                self?._activeLoginProcess = process
+                let cancelledEarly = self?._loginCancelled ?? false
+                if !cancelledEarly { self?._activeLoginProcess = process }
                 self?.lock.unlock()
+                if cancelledEarly {
+                    log.info("[runClaudeLogin] Cancelled before `claude auth login` started")
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
 
                 final class OnceBox: @unchecked Sendable {
                     private let lock = NSLock()

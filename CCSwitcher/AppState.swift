@@ -24,6 +24,12 @@ final class AppState: ObservableObject {
     @Published var activeSessions: [SessionInfo] = []
     @Published var isLoading = false
     @Published var isLoggingIn = false
+    /// True from the start of a login flow until its task returns. Cancel
+    /// clears isLoggingIn at once for the UI, but the cancelled task still
+    /// unwinds afterwards; nothing else may start a login or touch credentials
+    /// until it has.
+    private var loginTaskActive = false
+    private var loginBusy: Bool { isLoggingIn || loginTaskActive }
     @Published var loginAuthURL: URL?
     @Published var errorMessage: String?
     @Published var claudeAvailable = false
@@ -139,7 +145,7 @@ final class AppState: ObservableObject {
 
     /// Returns true only when a full refresh actually ran.
     private func refreshData() async -> Bool {
-        guard !isLoggingIn else {
+        guard !loginBusy else {
             log.info("[refresh] Skipping: login in progress")
             return false
         }
@@ -309,6 +315,11 @@ final class AppState: ObservableObject {
             log.error("[addAccount] Aborted: Claude CLI not found")
             return
         }
+        // Same rule as loginNewAccount: one credential mutation at a time.
+        guard !isSwitching, !loginBusy else {
+            log.warning("[addAccount] Skipped: a switch or a login is in progress")
+            return
+        }
 
         do {
             let status = try await claudeService.getAuthStatus()
@@ -390,15 +401,20 @@ final class AppState: ObservableObject {
         // entering while a switch is suspended mid-swap would back up the
         // WRONG live credential under the old active account's id — quietly
         // destroying that account's usable backup. Also blocks double-clicks.
-        guard !isSwitching, !isLoggingIn else {
+        guard !isSwitching, !loginBusy else {
             log.warning("[loginNewAccount] Skipped: a switch or another login is in progress")
             return
         }
 
         isLoggingIn = true
+        loginTaskActive = true
+        claudeService.beginLogin()
         loginAuthURL = nil
         errorMessage = nil
-        defer { loginAuthURL = nil }
+        defer {
+            loginAuthURL = nil
+            loginTaskActive = false
+        }
 
         do {
             // 1. Back up current account (token + oauthAccount) before login overwrites them
@@ -422,6 +438,9 @@ final class AppState: ObservableObject {
             // 3. Read the new identity from ~/.claude.json
             log.info("[loginNewAccount] Step 3: Reading post-login state...")
             let status = try await claudeService.getAuthStatus()
+            // cancelLogin() clears isLoggingIn; a Cancel during the status read
+            // must stop the flow before any credential or account change.
+            guard isLoggingIn else { throw CancellationError() }
             guard status.loggedIn else {
                 errorMessage = String(localized: "Login did not complete", bundle: L10n.bundle)
                 log.error("[loginNewAccount] Step 3: Not logged in after login!")
@@ -505,6 +524,8 @@ final class AppState: ObservableObject {
             log.info("[loginNewAccount] Step 6: New account active. Total: \(self.accounts.count)")
 
             isLoggingIn = false
+            // Credential work is finished; let refresh() run.
+            loginTaskActive = false
             await refresh()
             log.info("[loginNewAccount] ===== Login completed =====")
         } catch is CancellationError {
@@ -561,7 +582,7 @@ final class AppState: ObservableObject {
         // One credential mutation at a time: a switch already in flight (its
         // awaits leave the main actor free) or a running login must finish
         // before another switch may touch the keychain and ~/.claude.json.
-        guard !isSwitching, !isLoggingIn else {
+        guard !isSwitching, !loginBusy else {
             log.warning("[switchTo] Skipped: another switch or a login is in progress")
             return
         }
@@ -667,7 +688,7 @@ final class AppState: ObservableObject {
     /// burst the round-robin exists to prevent.
     private func evaluateAutoSwitch() async {
         guard autoSwitchEnabled, !isEvaluatingAutoSwitch else { return }
-        guard !isLoggingIn, !isSwitching, let active = activeAccount else { return }
+        guard !loginBusy, !isSwitching, let active = activeAccount else { return }
 
         // Cooldown: never auto-switch more than once per window.
         if let last = lastAutoSwitchAt, Date().timeIntervalSince(last) < autoSwitchCooldown {
@@ -725,7 +746,7 @@ final class AppState: ObservableObject {
             // login starting, a timer-tick refresh beginning, or a manual switch
             // the user just clicked (which updates `activeAccount` only after
             // its subprocess work finishes — hence the explicit isSwitching).
-            guard !isLoggingIn, !isRefreshing, !isSwitching, activeAccount?.id == active.id else {
+            guard !loginBusy, !isRefreshing, !isSwitching, activeAccount?.id == active.id else {
                 log.info("[autoSwitch] State changed during verification; standing down")
                 return
             }
@@ -805,15 +826,20 @@ final class AppState: ObservableObject {
         }
         // One credential mutation at a time — see loginNewAccount for why a
         // login during a suspended switch destroys a backup.
-        guard !isSwitching, !isLoggingIn else {
+        guard !isSwitching, !loginBusy else {
             log.warning("[reauth] Skipped: a switch or another login is in progress")
             return
         }
 
         isLoggingIn = true
+        loginTaskActive = true
+        claudeService.beginLogin()
         loginAuthURL = nil
         errorMessage = nil
-        defer { loginAuthURL = nil }
+        defer {
+            loginAuthURL = nil
+            loginTaskActive = false
+        }
 
         do {
             // 1. Back up current active account before login overwrites it
@@ -832,6 +858,9 @@ final class AppState: ObservableObject {
 
             // 3. Verify the login result matches the target account
             let status = try await claudeService.getAuthStatus()
+            // cancelLogin() clears isLoggingIn; a Cancel during the status read
+            // must stop the flow before any credential or account change.
+            guard isLoggingIn else { throw CancellationError() }
             guard status.loggedIn else {
                 errorMessage = String(localized: "Login did not complete", bundle: L10n.bundle)
                 isLoggingIn = false
@@ -890,6 +919,8 @@ final class AppState: ObservableObject {
             }
 
             isLoggingIn = false
+            // Credential work is finished; let refresh() run.
+            loginTaskActive = false
             await refresh()
             if captured {
                 log.info("[reauth] ===== Re-authentication completed =====")

@@ -130,10 +130,17 @@ final class UsageDatabaseTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: legacy.path))
     }
 
-    func testFailedLegacyImportRetriesAndCompletedImportNeverResurrectsRows() throws {
+    func testUnreadableLegacyIsTreatedAsMissing() throws {
         let legacy = directory.appendingPathComponent("old.json")
-        try Data("invalid".utf8).write(to: legacy)
-        XCTAssertThrowsError(try database(legacy: legacy))
+        // A directory at the legacy path makes the read itself fail.
+        try FileManager.default.createDirectory(at: legacy, withIntermediateDirectories: false)
+        let db = try database(legacy: legacy)
+        XCTAssertTrue(try db.winners().isEmpty)
+        XCTAssertEqual(try scalar(db, "SELECT COUNT(*) FROM grdb_migrations WHERE identifier='v2_import_legacy_json_v3'"), 1)
+    }
+
+    func testCompletedImportNeverResurrectsRows() throws {
+        let legacy = directory.appendingPathComponent("old.json")
         try legacyData().write(to: legacy)
         do {
             let db = try database(legacy: legacy)
@@ -145,6 +152,28 @@ final class UsageDatabaseTests: XCTestCase {
         let reopened = try database(legacy: legacy)
         XCTAssertTrue(try reopened.winners().isEmpty)
         XCTAssertEqual(try scalar(reopened, "SELECT COUNT(*) FROM grdb_migrations WHERE identifier='v2_import_legacy_json_v3'"), 1)
+    }
+
+    func testUndecodableOrOtherVersionLegacyIsSkippedLikeTheOldApp() throws {
+        for (index, content) in [Data("invalid".utf8), try JSONSerialization.data(withJSONObject: ["version": 2, "files": [:]])].enumerated() {
+            let legacy = directory.appendingPathComponent("old\(index).json")
+            try content.write(to: legacy)
+            let db = try UsageDatabase(url: directory.appendingPathComponent("skip\(index).sqlite"), root: root, legacyURL: legacy, timezone: utc)
+            XCTAssertTrue(try db.winners().isEmpty)
+            XCTAssertEqual(try scalar(db, "SELECT COUNT(*) FROM grdb_migrations WHERE identifier='v2_import_legacy_json_v3'"), 1)
+            XCTAssertTrue(FileManager.default.fileExists(atPath: legacy.path))
+        }
+    }
+
+    func testLegacySourcesOutsideRootAreSkippedIndividually() throws {
+        let inside = try JSONSerialization.jsonObject(with: legacyData()) as! [String: Any]
+        var files = inside["files"] as! [String: Any]
+        files[directory.appendingPathComponent("elsewhere/b.jsonl").path] = files.values.first!
+        let legacy = directory.appendingPathComponent("old.json")
+        try JSONSerialization.data(withJSONObject: ["version": 3, "files": files]).write(to: legacy)
+        let db = try database(legacy: legacy)
+        XCTAssertEqual(try scalar(db, "SELECT COUNT(*) FROM session_files"), 1)
+        XCTAssertEqual(try scalar(db, "SELECT COUNT(*) FROM session_files WHERE relative_path='a.jsonl'"), 1)
     }
 
     func testEmptyInitialImportHasReceipt() throws {
@@ -576,9 +605,14 @@ final class UsageDatabaseTests: XCTestCase {
         let legacy = directory.appendingPathComponent("local-snapshot.json")
         try snapshot.write(to: legacy)
         struct Envelope: Decodable { let version: Int; let files: [String: CachedFileV2] }
-        let original = try JSONDecoder().decode(Envelope.self, from: snapshot)
-        guard original.version == 3 else { throw XCTSkip("Local snapshot uses another historical format") }
+        let decoded = try JSONDecoder().decode(Envelope.self, from: snapshot)
+        guard decoded.version == 3 else { throw XCTSkip("Local snapshot uses another historical format") }
         let sourceRoot = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/projects")
+        // The import skips sources outside the current root; compare against the rest.
+        let canonicalRoot = canonicalUsageSourceURL(sourceRoot).path + "/"
+        let original = Envelope(version: decoded.version, files: decoded.files.filter {
+            canonicalUsageSourceURL(URL(fileURLWithPath: $0.key)).path.hasPrefix(canonicalRoot)
+        })
         let db = try UsageDatabase(url: databaseURL, root: sourceRoot, legacyURL: legacy, timezone: utc)
         // Reference is the former in-memory algorithm, applied to exactly the
         // same immutable JSON snapshot, not to today's changing source files.

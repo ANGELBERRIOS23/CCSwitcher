@@ -194,7 +194,6 @@
 
 // Durable usage history
 "usage_storage_newer" = "Une version plus récente de CCSwitcher est nécessaire pour cet historique. Veuillez mettre l’application à jour.";
-"usage_storage_import_failed" = "Impossible d’importer l’historique existant : %@. Le fichier original a été conservé.";
 "usage_storage_write_failed" = "Impossible d’enregistrer l’historique : %@. L’historique existant a été conservé.";
 "usage_storage_scan_failed" = "Impossible de synchroniser les fichiers sources. L’historique enregistré reste disponible. %@";
 "usage_storage_sources_paused" = "L’historique est conservé. La mise à jour de %d fichiers sources est suspendue ; consultez le journal de l’application.";

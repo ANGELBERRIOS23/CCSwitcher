@@ -194,7 +194,6 @@
 
 // Durable usage history
 "usage_storage_newer" = "Für den Nutzungsverlauf ist eine neuere Version von CCSwitcher erforderlich. Bitte aktualisieren Sie die App.";
-"usage_storage_import_failed" = "Der vorhandene Nutzungsverlauf konnte nicht importiert werden: %@. Die Originaldatei wurde beibehalten.";
 "usage_storage_write_failed" = "Der Nutzungsverlauf konnte nicht gespeichert werden: %@. Der vorhandene Verlauf wurde beibehalten.";
 "usage_storage_scan_failed" = "Die Quelldateien konnten nicht synchronisiert werden. Der gespeicherte Verlauf bleibt verfügbar. %@";
 "usage_storage_sources_paused" = "Der Nutzungsverlauf wurde beibehalten. Die Aktualisierung von %d Quelldateien ist pausiert; Details stehen im App-Protokoll.";
