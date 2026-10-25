@@ -466,13 +466,14 @@ struct PrimaryButtonStyle: ButtonStyle {
 /// Secondary action: quiet surface pill.
 struct SecondaryButtonStyle: ButtonStyle {
     var height: CGFloat = 32
+    var tint: Color = Theme.dim
 
     @Environment(\.panelStyle) private var style
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(.caption, design: style == .claude ? .default : .rounded).weight(.medium))
-            .foregroundStyle(Theme.dim)
+            .foregroundStyle(tint)
             .padding(.horizontal, 12)
             .frame(minHeight: height)
             .surface(radius: height / 2.6)

@@ -11,8 +11,11 @@ struct ClassicAccountSwitcherView: View {
     @State private var copiedLoginURL = false
     /// Bumped per copy, so only the latest copy's timer clears "Copied!".
     @State private var copyGeneration = 0
+    /// The account whose trash button was clicked; its row asks to confirm.
+    @State private var confirmingRemoveId: UUID?
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.panelShown) private var panelShown
 
     var body: some View {
         VStack(spacing: 0) {
@@ -33,6 +36,10 @@ struct ClassicAccountSwitcherView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 12)
                 .padding(.top, 8)
+        }
+        // Don't greet the next opening of the panel with a pending removal.
+        .onChange(of: panelShown) { _, shown in
+            if !shown { confirmingRemoveId = nil }
         }
     }
 
@@ -126,38 +133,62 @@ struct ClassicAccountSwitcherView: View {
                         .foregroundStyle(.textSecondary)
                 }
             }
+            // The confirmation buttons are wider than the ones they replace;
+            // keep the text to one line meanwhile so the row can't grow.
+            .lineLimit(confirmingRemoveId == account.id ? 1 : nil)
 
             Spacer()
 
-            if !account.isActive {
-                Button("Switch") {
-                    Task { await appState.switchTo(account) }
+            if confirmingRemoveId == account.id {
+                // Confirm in place, where the buttons were: an alert would
+                // take key status from the panel and close it.
+                Button("Cancel") {
+                    confirmingRemoveId = nil
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .fixedSize()
+
+                Button("Remove", role: .destructive) {
+                    confirmingRemoveId = nil
+                    appState.removeAccount(account)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .tint(Classic.brand)
+                .tint(.red)
                 .fixedSize()
-            }
+                .help("Remove account")
+            } else {
+                if !account.isActive {
+                    Button("Switch") {
+                        Task { await appState.switchTo(account) }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .tint(Classic.brand)
+                    .fixedSize()
+                }
 
-            Button {
-                Task { await appState.reauthenticateAccount(account) }
-            } label: {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            }
-            .buttonStyle(.plain)
-            .help("Re-authenticate (fix stale token)")
+                Button {
+                    Task { await appState.reauthenticateAccount(account) }
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+                .buttonStyle(.plain)
+                .help("Re-authenticate (fix stale token)")
 
-            Button {
-                appState.removeAccount(account)
-            } label: {
-                Image(systemName: "trash")
-                    .font(.caption)
-                    .foregroundStyle(.red)
+                Button {
+                    confirmingRemoveId = account.id
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+                .buttonStyle(.plain)
+                .help("Remove account")
             }
-            .buttonStyle(.plain)
-            .help("Remove account")
         }
         .padding(12)
         .background(cardBackground(fill: account.isActive ? .cardFillStrong : .clear))

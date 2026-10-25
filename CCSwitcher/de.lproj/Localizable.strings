@@ -219,3 +219,6 @@
 /* Login in progress */
 "Copy Login URL" = "Anmelde-URL kopieren";
 "Copied!" = "Kopiert!";
+
+/* Accessibility and small UX fixes */
+"Remove" = "Entfernen";

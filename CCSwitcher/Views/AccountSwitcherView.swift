@@ -195,7 +195,9 @@ private struct AccountRow: View {
     let onRemove: () -> Void
 
     @State private var hover = false
+    @State private var confirmingRemove = false
     @FocusState private var fieldFocused: Bool
+    @Environment(\.panelShown) private var panelShown
 
     var body: some View {
         HStack(spacing: 12) {
@@ -245,17 +247,40 @@ private struct AccountRow: View {
 
             // Actions
             HStack(spacing: 6) {
-                if !account.isActive {
-                    Button("Switch", action: onSwitch)
-                        .buttonStyle(PrimaryButtonStyle(height: 28))
-                        .focusable(false)
-                }
+                if confirmingRemove {
+                    // Confirm in place, in the same space as the regular
+                    // actions: an alert or sheet would take key status from
+                    // the panel and close it.
+                    Button("Cancel") {
+                        withAnimation(Theme.ease) { confirmingRemove = false }
+                    }
+                    .buttonStyle(SecondaryButtonStyle(height: 28))
+                    .fixedSize()
+                    .focusable(false)
 
-                CircleIconButton(icon: "arrow.triangle.2.circlepath", size: 26, tint: Theme.warning, action: onReauth)
-                    .help("Re-authenticate (fix stale token)")
-
-                CircleIconButton(icon: "trash", size: 26, tint: Theme.danger, action: onRemove)
+                    Button("Remove") {
+                        confirmingRemove = false
+                        onRemove()
+                    }
+                    .buttonStyle(SecondaryButtonStyle(height: 28, tint: Theme.danger))
+                    .fixedSize()
+                    .focusable(false)
                     .help("Remove account")
+                } else {
+                    if !account.isActive {
+                        Button("Switch", action: onSwitch)
+                            .buttonStyle(PrimaryButtonStyle(height: 28))
+                            .focusable(false)
+                    }
+
+                    CircleIconButton(icon: "arrow.triangle.2.circlepath", size: 26, tint: Theme.warning, action: onReauth)
+                        .help("Re-authenticate (fix stale token)")
+
+                    CircleIconButton(icon: "trash", size: 26, tint: Theme.danger) {
+                        withAnimation(Theme.ease) { confirmingRemove = true }
+                    }
+                    .help("Remove account")
+                }
             }
         }
         .padding(12)
@@ -268,6 +293,10 @@ private struct AccountRow: View {
         .onHover { hover = $0 }
         .animation(.easeOut(duration: 0.15), value: hover)
         .animation(Theme.ease, value: account.isActive)
+        // Don't greet the next opening of the panel with a pending removal.
+        .onChange(of: panelShown) { _, shown in
+            if !shown { confirmingRemove = false }
+        }
     }
 
     private var labelEditor: some View {
