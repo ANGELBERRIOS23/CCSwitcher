@@ -36,6 +36,9 @@
 "Checking..." = "確認中...";
 "Check for Updates" = "アップデートを確認";
 "Easily switch between Claude Code accounts and monitor usage." = "Claude Code アカウントの切り替えと使用状況の監視を簡単に。";
+"Send anonymous launch counts" = "匿名の起動回数を送信";
+"Only launch counts and Aptabase's standard metadata are sent." = "起動回数と Aptabase の標準的な技術情報のみを送信します。";
+"Changes apply from the next launch." = "変更は次回の起動から適用されます。";
 
 /* Usage Dashboard */
 "Loading usage data..." = "使用データを読み込み中...";

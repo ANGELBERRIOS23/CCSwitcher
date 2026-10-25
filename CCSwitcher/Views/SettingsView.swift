@@ -10,6 +10,7 @@ struct SettingsView: View {
     @AppStorage("showFullEmail") private var showFullEmail = false
     @AppStorage("showInDock") private var showInDock = false
     @AppStorage("appLanguage") private var appLanguage = "auto"
+    @AppStorage(Analytics.enabledKey) private var analyticsEnabled = true
     @AppStorage("autoSwitchEnabled") private var autoSwitchEnabled = false
     @AppStorage("autoSwitchThreshold") private var autoSwitchThreshold = 90.0
     @State private var launchAtLogin = false
@@ -159,47 +160,79 @@ struct SettingsView: View {
     // MARK: - About Tab
 
     private var aboutTab: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "brain.head.profile")
-                .font(.system(size: 48))
-                .foregroundStyle(.brand)
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(spacing: 0) {
+                    VStack(spacing: 6) {
+                        Image(nsImage: NSApplication.shared.applicationIconImage)
+                            .resizable()
+                            .interpolation(.high)
+                            .frame(width: 64, height: 64)
+                            .accessibilityHidden(true)
 
-            Text("CCSwitcher")
-                .font(.title2.weight(.bold))
+                        Text("CCSwitcher")
+                            .font(.title2.weight(.semibold))
+                            .padding(.top, 4)
 
-            Text("Claude Code Account Switcher")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                        Text("Claude Code Account Switcher")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
 
-            Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+                        Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
 
-            Button(updateChecker.isChecking ? "Checking..." : "Check for Updates") {
-                updateChecker.checkForUpdates(manual: true)
-            }
-            .disabled(updateChecker.isChecking)
-            .padding(.top, 4)
+                        Button(updateChecker.isChecking ? "Checking..." : "Check for Updates") {
+                            updateChecker.checkForUpdates(manual: true)
+                        }
+                        .disabled(updateChecker.isChecking)
+                        .controlSize(.small)
+                        .padding(.top, 6)
+                    }
+                    .frame(maxWidth: .infinity)
 
-            Spacer()
+                    VStack(alignment: .leading, spacing: 8) {
+                        Divider()
+                            .padding(.bottom, 6)
 
-            Text("Easily switch between Claude Code accounts and monitor usage.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
+                        HStack {
+                            Text("Send anonymous launch counts")
+                                .font(.caption)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityHidden(true)
+                            Spacer(minLength: 12)
+                            Toggle("Send anonymous launch counts", isOn: $analyticsEnabled)
+                                .labelsHidden()
+                                .toggleStyle(.switch)
+                                .controlSize(.mini)
+                        }
 
-            VStack(spacing: 2) {
-                Link("More apps at xueshi.dev", destination: URL(string: "https://xueshi.dev")!)
-                    .font(.caption)
-                Text("© 2026 Xueshi Qiao")
+                        Text("Only launch counts and Aptabase's standard metadata are sent.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Text("Changes apply from the next launch.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 24)
+
+                    Spacer(minLength: 20)
+
+                    HStack(spacing: 12) {
+                        Link("More apps at xueshi.dev", destination: URL(string: "https://xueshi.dev")!)
+                        Text("© 2026 Xueshi Qiao")
+                            .foregroundStyle(.secondary)
+                    }
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 32)
+                .padding(.vertical, 24)
+                .frame(maxWidth: .infinity, minHeight: geometry.size.height)
             }
-            .padding(.top, 8)
         }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Helpers

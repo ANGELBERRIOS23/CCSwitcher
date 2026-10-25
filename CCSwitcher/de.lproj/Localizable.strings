@@ -36,6 +36,9 @@
 "Checking..." = "Überprüfe...";
 "Check for Updates" = "Nach Updates suchen";
 "Easily switch between Claude Code accounts and monitor usage." = "Einfach zwischen Claude Code Konten wechseln und die Nutzung überwachen.";
+"Send anonymous launch counts" = "Anonyme Startstatistik senden";
+"Only launch counts and Aptabase's standard metadata are sent." = "Es werden nur App-Starts und die Standardmetadaten von Aptabase gesendet.";
+"Changes apply from the next launch." = "Änderungen gelten ab dem nächsten Start.";
 
 /* Usage Dashboard */
 "Loading usage data..." = "Nutzungsdaten werden geladen...";

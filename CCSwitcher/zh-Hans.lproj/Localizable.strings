@@ -36,6 +36,9 @@
 "Checking..." = "检查中...";
 "Check for Updates" = "检查更新";
 "Easily switch between Claude Code accounts and monitor usage." = "轻松切换 Claude Code 账户并监控用量。";
+"Send anonymous launch counts" = "发送匿名启动统计";
+"Only launch counts and Aptabase's standard metadata are sent." = "仅发送启动次数及 Aptabase 的标准技术信息。";
+"Changes apply from the next launch." = "下次启动起生效。";
 
 /* Usage Dashboard */
 "Loading usage data..." = "正在加载用量数据...";

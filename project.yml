@@ -15,6 +15,9 @@ options:
     - es
 
 packages:
+  Aptabase:
+    url: https://github.com/aptabase/aptabase-swift
+    exactVersion: "0.4.0"
   GRDB:
     url: https://github.com/groue/GRDB.swift
     exactVersion: "7.10.0"
@@ -76,6 +79,7 @@ targets:
         codeSign: true
       - package: Sparkle
       - package: GRDB
+      - package: Aptabase
 
   CCSwitcherWidgetExtension:
     type: extensionkit-extension

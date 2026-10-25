@@ -14,6 +14,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // App starts as agent/accessory due to LSUIElement
+        Analytics.trackLaunch()
     }
 
 

@@ -36,6 +36,9 @@
 "Checking..." = "Checking...";
 "Check for Updates" = "Check for Updates";
 "Easily switch between Claude Code accounts and monitor usage." = "Easily switch between Claude Code accounts and monitor usage.";
+"Send anonymous launch counts" = "Send anonymous launch counts";
+"Only launch counts and Aptabase's standard metadata are sent." = "Only launch counts and Aptabase's standard metadata are sent.";
+"Changes apply from the next launch." = "Changes apply from the next launch.";
 
 /* Usage Dashboard */
 "Loading usage data..." = "Loading usage data...";
