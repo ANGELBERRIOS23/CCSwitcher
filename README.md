@@ -35,6 +35,10 @@ CCSwitcher is a lightweight, pure menu bar macOS application designed to help de
 - **Seamless Login Flow**: Add new accounts without ever opening a terminal. The app silently invokes the CLI and handles the browser OAuth loop for you.
 - **System-Native UX**: A clean, native SwiftUI interface that behaves exactly like a first-class macOS menu bar utility, complete with a fully functional settings window.
 
+## Anonymous launch statistics
+
+CCSwitcher sends only an anonymous `app_launched` event to [Aptabase](https://aptabase.com), with no custom properties. Aptabase includes its standard technical metadata, such as app and OS versions. No account data, credentials, conversations, usage details, or other app activity is sent to Aptabase. Launch counting is on by default; turn off **Send anonymous launch counts** in **Settings → About** to stop counting future launches.
+
 ## Screenshots
 
 <p align="center">
@@ -106,13 +110,13 @@ We deliberately chose the latter, trading a tiny per-refresh subprocess overhead
 
 The user-visible result is the same as CodexBar's: seamless, zero-interaction. The difference is **who's on the hook for keeping up with Anthropic's private OAuth surface** — CodexBar takes that on themselves (faster, riskier); CCSwitcher delegates to the official CLI (small subprocess cost, safer).
 
-### 4. Local JSONL Parse Cache (Performance)
+### 4. Durable Local Usage History
 
 Cost summaries and today's-activity stats are computed from Claude Code's per-session JSONL files under `~/.claude/projects/`. A heavy user's directory can be hundreds of megabytes across thousands of files. Re-parsing the whole tree every 5 minutes was originally CPU-pegging on idle ([#13](https://github.com/XueshiQiao/CCSwitcher/issues/13)).
 
-- CCSwitcher maintains a persistent per-file parse cache at `~/Library/Application Support/CCSwitcher/session-parse-cache.json`, keyed by file mtime.
-- On each refresh, files with unchanged mtime are skipped entirely — the cache holds their previously-parsed aggregates and the result is summed in memory.
-- Only the actively-modified files (typically just your current Claude Code session) get re-parsed. Steady-state refreshes drop from ~5 seconds of saturated CPU to under 100ms.
+- CCSwitcher stores usage records and per-file activity in `~/Library/Application Support/CCSwitcher/usage.sqlite`, using GRDB and SQLite.
+- Refreshes skip unchanged files. Changed sources update only their changed records in a transaction; the app no longer rewrites one JSON snapshot of all history.
+- Existing JSON history is imported once and preserved. Removing a Claude transcript does not delete its recorded history. See [the storage design](docs/sqlite-usage-storage.md).
 
 ### 5. Security-CLI Keychain Reader
 

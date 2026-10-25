@@ -263,7 +263,7 @@ actor PricingService {
     }
 
     /// Snapshot of which source the cache is currently serving from.
-    /// Used by SessionParseCacheV2 to stamp the cache envelope.
+    /// Used by the cost details UI to describe the active pricing source.
     func currentSource() -> PricingSource { source }
 
     /// Trigger a background revalidation of the LiteLLM pricing JSON. Returns

@@ -89,9 +89,9 @@ Claude の OAuth アクセストークンは短い有効期間（約 8 時間）
 
 コストの集計と当日のアクティビティ統計は、`~/.claude/projects/` 下の各セッションのJSONLファイルから計算されます。ヘビーユーザーのこのディレクトリは数千ファイル、合計数百MBになることもあります。当初、5分ごとにツリー全体を再パースしていたためアイドル時にCPUが張り付いていました（[#13](https://github.com/XueshiQiao/CCSwitcher/issues/13)）。
 
-- CCSwitcherは `~/Library/Application Support/CCSwitcher/session-parse-cache.json` にファイルmtimeをキーとする永続的なファイル単位のパースキャッシュを保持します。
-- 各リフレッシュ時、mtimeが変わっていないファイルは完全にスキップ——キャッシュにそれらの以前のパース集計値が保持されており、メモリ内で合計するだけです。
-- アクティブに変更されているファイル（通常はあなたの現在のClaude Codeセッションだけ）のみが再パースされます。定常状態のリフレッシュは約5秒のCPU飽和から100ms未満に下がります。
+- CCSwitcher は GRDB と SQLite を使用し、使用量明細とファイル別の活動統計を `~/Library/Application Support/CCSwitcher/usage.sqlite` に保存します。
+- 変更のないファイルはスキップします。変更されたレコードだけをトランザクションで更新し、履歴全体の JSON を書き直しません。
+- 既存の JSON 履歴は一度だけ取り込みます。Claude のログを削除しても、保存済みの履歴は削除しません。
 
 ### 5. Security-CLIキーチェーンリーダー
 

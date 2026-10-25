@@ -81,6 +81,9 @@ struct CostDetailView: View {
         let costs = appState.costSummary.dailyCosts
         let todayStr = todayString()
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = appState.usageReportingTimezone
+        formatter.calendar = Calendar(identifier: .gregorian)
         formatter.dateFormat = "yyyy-MM-dd"
 
         let last7 = costForLastDays(7, costs: costs, today: todayStr, formatter: formatter)
@@ -115,7 +118,9 @@ struct CostDetailView: View {
 
     private func costForLastDays(_ days: Int, costs: [DailyCost], today: String, formatter: DateFormatter) -> Double {
         guard let todayDate = formatter.date(from: today) else { return 0 }
-        let startDate = Calendar.current.date(byAdding: .day, value: -(days - 1), to: todayDate)!
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = appState.usageReportingTimezone
+        guard let startDate = calendar.date(byAdding: .day, value: -(days - 1), to: todayDate) else { return 0 }
         let startStr = formatter.string(from: startDate)
         return costs.filter { $0.date >= startStr && $0.date <= today }.reduce(0) { $0 + $1.totalCost }
     }
@@ -237,14 +242,21 @@ struct CostDetailView: View {
 
     private func todayString() -> String {
         let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = appState.usageReportingTimezone
+        f.calendar = Calendar(identifier: .gregorian)
         f.dateFormat = "yyyy-MM-dd"
         return f.string(from: Date())
     }
 
     private func todayDisplayDate() -> String {
         let f = DateFormatter()
+        f.timeZone = appState.usageReportingTimezone
+        f.calendar = Calendar(identifier: .gregorian)
         f.dateFormat = "MMM d"
-        return f.string(from: Date())
+        let date = f.string(from: Date())
+        guard appState.usageReportingTimezone.identifier != TimeZone.current.identifier else { return date }
+        return date + " · " + (appState.usageReportingTimezone.abbreviation(for: Date()) ?? appState.usageReportingTimezone.identifier)
     }
 
     private func shortDate(_ dateStr: String) -> String {

@@ -24,6 +24,10 @@ CCSwitcher 是一款轻量级的纯 macOS 菜单栏应用程序，旨在帮助�
 - **无缝登录流程**：无需打开终端即可添加新账户。应用在后台静默调用 CLI 并为您处理浏览器 OAuth 流程。
 - **系统原生体验**：简洁的原生 SwiftUI 界面，表现完全如同一流的 macOS 菜单栏工具，配备功能完整的设置窗口。
 
+## 匿名启动统计
+
+CCSwitcher 仅向 [Aptabase](https://aptabase.com) 发送匿名的 `app_launched` 启动事件，不附带任何自定义属性。Aptabase 会附加其标准技术信息，例如应用版本和系统版本。账户数据、凭证、对话、用量明细及其他应用内活动都不会发送给 Aptabase。启动统计默认开启；可在 **设置 → 关于** 中关闭 **发送匿名启动统计**，此后启动应用时将不再统计。
+
 ## 截图
 
 <p align="center">
@@ -85,13 +89,13 @@ Claude 的 OAuth access token 生命周期较短（通常约 8 小时），刷�
 
 用户感知与 CodexBar 是一样的：无缝、零交互。差异在「谁负责对接 Anthropic 的私有 OAuth 接口」——CodexBar 选择自己对接（性能更好但风险更大），CCSwitcher 选择委托给官方 CLI（开销略大但更安全）。
 
-### 4. 本地 JSONL 解析缓存（性能）
+### 4. 持久保存的本地用量历史
 
 费用汇总和当日活动统计都是从 `~/.claude/projects/` 下每个会话的 JSONL 文件计算出来的。重度用户的该目录可能有数千个文件、共数百兆。最初每 5 分钟重新解析整棵目录树会在空闲时把 CPU 跑满（[#13](https://github.com/XueshiQiao/CCSwitcher/issues/13)）。
 
-- CCSwitcher 在 `~/Library/Application Support/CCSwitcher/session-parse-cache.json` 维护一份按文件 mtime 索引的持久化逐文件解析缓存。
-- 每次刷新时，mtime 未变化的文件被完全跳过——缓存中保存了它们之前的解析聚合结果，内存里求和即可。
-- 只有正在被修改的文件（通常就是你当前的 Claude Code 会话）会被重新解析。稳态刷新从约 5 秒的 CPU 满载降到 100ms 以下。
+- CCSwitcher 使用 GRDB 和 SQLite，将用量明细及逐文件活动统计保存在 `~/Library/Application Support/CCSwitcher/usage.sqlite`。
+- 刷新时跳过未变化的文件；源文件变化后，在事务中只更新变化的记录，不再重写包含全部历史的 JSON 文件。
+- 旧 JSON 历史只导入一次并保留原文件。删除 Claude 会话文件不会删除已记录的历史。详见[存储设计](docs/sqlite-usage-storage.md)。
 
 ### 5. Security-CLI 钥匙串读取器
 

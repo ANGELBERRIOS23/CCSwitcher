@@ -188,3 +188,10 @@
 
 "Automatically check for updates" = "自动检查更新";
 "Automatically download updates" = "自动下载更新";
+
+// Durable usage history
+"usage_storage_newer" = "用量数据库由更新版本的 CCSwitcher 创建，请更新应用后继续使用。";
+"usage_storage_import_failed" = "无法导入已有用量历史：%@。原始文件已保留。";
+"usage_storage_write_failed" = "无法保存用量历史：%@。已有历史已保留。";
+"usage_storage_scan_failed" = "无法同步原始会话文件，仍可查看已保存的历史。%@";
+"usage_storage_sources_paused" = "用量历史已保留，%d 个源文件的更新已暂停；请查看应用日志了解详情。";

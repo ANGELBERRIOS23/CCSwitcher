@@ -157,3 +157,13 @@ GRDB DatabaseMigrator 管理 schema 历史。已提交迁移不修改，只追�
 - https://www.sqlite.org/json1.html
 - https://www.sqlite.org/pragma.html#pragma_synchronous
 - https://www.sqlite.org/backup.html
+
+## 实现验证记录
+
+实现使用一次性 `v2_import_legacy_json_v3` 数据迁移保存导入回执，导入 SQL 和解码结构固定在旧版本，不依赖后续业务 schema。源文件身份与内容指纹存入扩展 JSON，正常追加验证旧长度前缀的 SHA256；目录移动时保留原来源行。
+
+首次刷新先发布数据库内已有统计，再核验原始文件。原始目录不可用时继续读取已存历史。多个来源的身份无法可靠区分时暂停该来源同步并报告，不猜测归属或清理记录。
+
+隔离的 XCTest 目标不启动主应用、不访问真实 Keychain，也不迁移真实数据库。测试包括既有 JSON 的只读副本与旧内存聚合规则对照、定价边界、移动后追加、跨根目录移动、保持大小/mtime 的替换和迁移回执。
+
+本机旧 JSON 副本包含 301 个来源文件和 12,233 条用量记录；迁移后的 11,967 条计费用胜出记录与旧算法一致。合成数据库 127,488,000 字节，单来源单条更新产生约 25 KB WAL；这一测试度量 SQLite WAL 增量，不等同于 SSD 物理写入或整天使用的预测。查询计划没有临时排序 B 树。

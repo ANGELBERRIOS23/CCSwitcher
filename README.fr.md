@@ -89,9 +89,9 @@ Le résultat visible par l'utilisateur est le même que celui que voient les uti
 
 Les résumés de coûts et les statistiques d'activité du jour sont calculés à partir des fichiers JSONL par session de Claude Code sous `~/.claude/projects/`. Le répertoire d'un utilisateur intensif peut représenter des centaines de mégaoctets répartis sur des milliers de fichiers. À l'origine, re-parser l'arbre entier toutes les 5 minutes saturait le CPU au repos ([#13](https://github.com/XueshiQiao/CCSwitcher/issues/13)).
 
-- CCSwitcher maintient un cache de parsing persistant par fichier à `~/Library/Application Support/CCSwitcher/session-parse-cache.json`, indexé par la mtime du fichier.
-- À chaque rafraîchissement, les fichiers dont la mtime n'a pas changé sont entièrement ignorés — le cache contient leurs agrégats précédemment parsés et le résultat est sommé en mémoire.
-- Seuls les fichiers activement modifiés (typiquement juste votre session Claude Code actuelle) sont re-parsés. Les rafraîchissements en régime établi passent de ~5 secondes de CPU saturé à moins de 100 ms.
+- CCSwitcher conserve les données d’utilisation et les statistiques par fichier dans `~/Library/Application Support/CCSwitcher/usage.sqlite`, avec GRDB et SQLite.
+- Les fichiers inchangés sont ignorés. Les enregistrements modifiés sont mis à jour dans une transaction, sans réécrire tout l’historique JSON.
+- L’ancien historique JSON est importé une seule fois. Supprimer un journal Claude ne supprime pas l’historique déjà enregistré.
 
 ### 5. Lecteur de trousseau via le CLI Security
 

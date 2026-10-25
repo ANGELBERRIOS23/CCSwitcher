@@ -1,16 +1,16 @@
 import Foundation
 
 /// Provides cost summaries from Claude Code session JSONL files.
-/// All actual parsing is done by `SessionParseCacheV2`; this is a thin facade.
+/// All actual parsing is done by `SessionUsageStore`; this is a thin facade.
 final class CostParser: Sendable {
     static let shared = CostParser()
     private init() {}
 
-    /// Compute cost summary from the in-memory parse cache.
-    /// Caller must ensure `SessionParseCacheV2.shared.refreshFromFilesystem()`
+    /// Compute cost summary from the durable usage database.
+    /// Caller must ensure `SessionUsageStore.shared.refreshFromFilesystem()`
     /// has been awaited at least once this cycle.
-    func getCostSummary() async -> CostSummary {
-        return await SessionParseCacheV2.shared.costSummary()
+    func getCostSummary() async throws -> CostSummary {
+        return try await SessionUsageStore.shared.costSummary()
     }
 
     // MARK: - Helpers

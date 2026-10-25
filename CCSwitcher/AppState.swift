@@ -26,6 +26,7 @@ final class AppState: ObservableObject {
     @Published var errorMessage: String?
     @Published var claudeAvailable = false
     @Published var lastUsageRefresh: Date?
+    @Published var usageReportingTimezone: TimeZone = UserDefaults.standard.string(forKey: SessionUsageStore.timezonePreference).flatMap(TimeZone.init(identifier:)) ?? .current
     @Published var costSummary: CostSummary = .empty
     @Published var activityStats: ActivityStats = .empty
 
@@ -53,6 +54,7 @@ final class AppState: ObservableObject {
 
     private let accountsKey = "com.ccswitcher.accounts"
     private var refreshTimer: Timer?
+    private var hasLoadedUsageHistory = false
 
     // MARK: - Usage polling state
 
@@ -173,16 +175,30 @@ final class AppState: ObservableObject {
         recentActivity = statsParser.getRecentActivity(days: 7)
         activeSessions = statsParser.getActiveSessions()
 
-        // JSONL parsing: walk filesystem once via the shared cache, then
-        // pull aggregated outputs. The actor's executor is off the main
-        // thread, so awaiting these does not block the UI.
-        await SessionParseCacheV2.shared.refreshFromFilesystem()
-        let cost = await costParser.getCostSummary()
-        let activity = await activityParser.getTodayStats()
-        costSummary = cost
-        activityStats = activity
+        do {
+            if !hasLoadedUsageHistory {
+                // Publish imported/stored history before the first source scan,
+                // which may need to validate many gigabytes of old transcripts.
+                usageReportingTimezone = TimeZone(identifier: try await SessionUsageStore.shared.reportingTimezoneIdentifier()) ?? usageReportingTimezone
+                costSummary = try await costParser.getCostSummary()
+                activityStats = try await activityParser.getTodayStats()
+                hasLoadedUsageHistory = true
+            }
+            let warning = try await SessionUsageStore.shared.refreshFromFilesystem()
+            usageReportingTimezone = TimeZone(identifier: try await SessionUsageStore.shared.reportingTimezoneIdentifier()) ?? usageReportingTimezone
+            let cost = try await costParser.getCostSummary()
+            let activity = try await activityParser.getTodayStats()
+            costSummary = cost
+            activityStats = activity
+            if let warning { errorMessage = warning }
+        } catch {
+            // A storage failure must not clear visible statistics or prevent
+            // unrelated account refreshes and switching from functioning.
+            errorMessage = error.localizedDescription
+            log.error("[refresh] Usage database: \(error.localizedDescription)")
+        }
 
-        log.info("[refresh] Usage: weekly=\(self.usageSummary.weeklyMessages) msgs, \(self.activeSessions.count) active sessions, today=$\(String(format: "%.2f", cost.todayCost)) turns=\(activity.conversationTurns)")
+        log.info("[refresh] Usage: weekly=\(self.usageSummary.weeklyMessages) msgs, \(self.activeSessions.count) active sessions, today=$\(String(format: "%.2f", costSummary.todayCost)) turns=\(activityStats.conversationTurns)")
 
         updateWidgetData()
         isLoading = false

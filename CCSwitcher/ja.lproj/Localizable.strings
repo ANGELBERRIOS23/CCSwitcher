@@ -188,3 +188,10 @@
 
 "Automatically check for updates" = "アップデートを自動的に確認";
 "Automatically download updates" = "アップデートを自動的にダウンロード";
+
+// Durable usage history
+"usage_storage_newer" = "この使用履歴には新しいバージョンの CCSwitcher が必要です。アプリを更新してください。";
+"usage_storage_import_failed" = "既存の使用履歴を取り込めませんでした：%@。元のファイルは保持されています。";
+"usage_storage_write_failed" = "使用履歴を保存できませんでした：%@。既存の履歴は保持されています。";
+"usage_storage_scan_failed" = "元の会話ファイルを同期できませんでした。保存済みの履歴は引き続き参照できます。%@";
+"usage_storage_sources_paused" = "使用履歴は保持されています。%d 個の元ファイルの更新を一時停止しました。詳細はアプリのログを確認してください。";
