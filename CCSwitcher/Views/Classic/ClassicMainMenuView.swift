@@ -241,7 +241,8 @@ struct ClassicMainMenuView: View {
                 Text(error)
                     .font(.caption2)
                     .foregroundStyle(.textSecondary)
-                    .lineLimit(1)
+                    .lineLimit(3)
+                    .help(error)
             }
 
             Spacer()

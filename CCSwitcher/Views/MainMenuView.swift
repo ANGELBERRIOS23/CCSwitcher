@@ -366,7 +366,8 @@ struct MainMenuView: View {
                 Text(error)
                     .font(.caption2)
                     .foregroundStyle(Theme.dim)
-                    .lineLimit(1)
+                    .lineLimit(3)
+                    .help(error)
             } else if let lastRefresh = appState.lastUsageRefresh {
                 Image(systemName: "clock")
                     .font(.caption2)
