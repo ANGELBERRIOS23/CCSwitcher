@@ -234,12 +234,17 @@ private struct AccountRow: View {
                     .foregroundStyle(Theme.dim)
                     .lineLimit(1)
 
+                // One line: with the row's buttons beside it the plan name used
+                // to wrap mid-word ("Tea" / "m"). The plan keeps its width and
+                // the provider name truncates instead.
                 HStack(spacing: 8) {
                     if let sub = account.displaySubscriptionType {
                         Label(sub, systemImage: "creditcard")
+                            .fixedSize()
                     }
                     Text(account.provider.rawValue)
                 }
+                .lineLimit(1)
                 .font(.caption2)
                 .foregroundStyle(Theme.dim)
             }

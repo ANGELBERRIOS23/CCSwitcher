@@ -125,16 +125,20 @@ struct ClassicAccountSwitcherView: View {
                     .font(.caption)
                     .foregroundStyle(.textSecondary)
 
+                // One line: the plan keeps its width and the provider name
+                // truncates instead of the plan wrapping mid-word.
                 HStack(spacing: 8) {
                     if let sub = account.displaySubscriptionType {
                         Label(sub, systemImage: "creditcard")
                             .font(.caption2)
                             .foregroundStyle(.textSecondary)
+                            .fixedSize()
                     }
                     Text(account.provider.rawValue)
                         .font(.caption2)
                         .foregroundStyle(.textSecondary)
                 }
+                .lineLimit(1)
             }
             // The confirmation buttons are wider than the ones they replace;
             // keep the text to one line meanwhile so the row can't grow.
