@@ -166,17 +166,13 @@ final class KeychainService: Sendable {
 
     func writeOAuthAccount(_ oauthAccount: [String: AnyCodable]) -> Bool {
         guard let data = FileManager.default.contents(atPath: claudeJsonPath),
-              var json = try? JSONDecoder().decode([String: AnyCodable].self, from: data) else {
+              let json = try? JSONDecoder().decode([String: AnyCodable].self, from: data) else {
             log.error("[writeOAuthAccount] Failed to read \(claudeJsonPath)")
             return false
         }
 
-        json["oauthAccount"] = AnyCodable(oauthAccount)
-
         do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let newData = try encoder.encode(json)
+            let newData = try Self.claudeJSON(json, replacingOAuthAccount: oauthAccount)
             try newData.write(to: URL(fileURLWithPath: claudeJsonPath), options: .atomic)
             let email = (oauthAccount["emailAddress"]?.value as? String) ?? "?"
             log.info("[writeOAuthAccount] Written: email=\(email)")
@@ -185,6 +181,16 @@ final class KeychainService: Sendable {
             log.error("[writeOAuthAccount] Failed: \(error.localizedDescription)")
             return false
         }
+    }
+
+    /// The bytes `writeOAuthAccount` writes back: `json` with its
+    /// `oauthAccount` block replaced and every other key carried over.
+    static func claudeJSON(_ json: [String: AnyCodable], replacingOAuthAccount oauthAccount: [String: AnyCodable]) throws -> Data {
+        var json = json
+        json["oauthAccount"] = AnyCodable(oauthAccount)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(json)
     }
 
     // MARK: - Account Backup Operations (token + oauthAccount)
