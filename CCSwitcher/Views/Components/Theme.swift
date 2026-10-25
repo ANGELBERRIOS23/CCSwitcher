@@ -349,12 +349,13 @@ struct Avatar: View {
     }
 }
 
-/// Small glowing status light; pulses while syncing.
+/// Small glowing status light; pulses while syncing (unless Reduce Motion is on).
 struct StatusDot: View {
     enum State { case connected, syncing, idle, error }
     var state: State
     @SwiftUI.State private var pulse = false
     @Environment(\.panelStyle) private var style
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var color: Color {
         switch state {
@@ -366,13 +367,14 @@ struct StatusDot: View {
     }
 
     var body: some View {
+        let pulsing = state == .syncing && !reduceMotion
         Circle()
             .fill(color)
             .frame(width: 7, height: 7)
             .shadow(color: color.opacity(state == .idle || style == .claude ? 0 : 0.7), radius: 3)
-            .scaleEffect(state == .syncing && pulse ? 1.5 : 1)
-            .opacity(state == .syncing && pulse ? 0.45 : 1)
-            .animation(state == .syncing
+            .scaleEffect(pulsing && pulse ? 1.5 : 1)
+            .opacity(pulsing && pulse ? 0.45 : 1)
+            .animation(pulsing
                        ? .easeInOut(duration: 0.7).repeatForever(autoreverses: true)
                        : Theme.ease, value: pulse)
             .onAppear { pulse = state == .syncing }
@@ -499,6 +501,7 @@ struct GlowBar: View {
 
     @State private var grown = false
     @Environment(\.panelStyle) private var style
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { geo in
@@ -527,7 +530,7 @@ struct GlowBar: View {
         }
         .frame(height: height + 4)
         .animation(Theme.spring, value: fraction)
-        .animation(.spring(duration: 0.9, bounce: 0).delay(0.15), value: grown)
+        .animation(reduceMotion ? nil : .spring(duration: 0.9, bounce: 0).delay(0.15), value: grown)
         .onAppear { grown = true }
     }
 }

@@ -71,6 +71,7 @@ struct MainMenuView: View {
     @State private var selectedTab: Tab = .usage
     @Namespace private var tabIndicator
     @Environment(\.panelStyle) private var panelStyle
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // Measured heights driving the popover frame.
     // Defaults are reasonable fallbacks for the first render pass, before
@@ -152,7 +153,7 @@ struct MainMenuView: View {
                 .enter(3)
         }
         .frame(width: 360, height: popoverHeight)
-        .animation(Theme.spring, value: popoverHeight)
+        .animation(reduceMotion ? nil : Theme.spring, value: popoverHeight)
         .foregroundStyle(Theme.text)
         .fontDesign(panelStyle == .claude ? .default : .rounded)
         .background(
@@ -338,7 +339,7 @@ struct MainMenuView: View {
                     selected: selectedTab == tab,
                     namespace: tabIndicator
                 ) {
-                    withAnimation(Theme.spring) { selectedTab = tab }
+                    withAnimation(reduceMotion ? nil : Theme.spring) { selectedTab = tab }
                 }
                 .keyboardShortcut(tab.shortcut, modifiers: .command)
             }

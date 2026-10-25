@@ -11,6 +11,7 @@ struct ClassicMainMenuView: View {
     @EnvironmentObject private var appState: AppState
     @AppStorage("showFullEmail") private var showFullEmail = false
     @State private var selectedTab: Tab = .usage
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // Measured heights driving the popover frame. Defaults are fallbacks for
     // the first render pass, before the GeometryReader measurements fire.
@@ -77,7 +78,7 @@ struct ClassicMainMenuView: View {
                 .measureChromeHeight()
         }
         .frame(width: 360, height: popoverHeight)
-        .animation(.easeInOut(duration: 0.2), value: popoverHeight)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: popoverHeight)
         .background(.ultraThinMaterial)
         .onPreferenceChange(UsageContentHeightKey.self) { value in
             if value > 0 { usageContentHeight = value }
@@ -211,7 +212,7 @@ struct ClassicMainMenuView: View {
                     .padding(2)
                     .frame(width: tabWidth)
                     .offset(x: tabWidth * index)
-                    .animation(.easeInOut(duration: 0.15), value: selectedTab)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: selectedTab)
             }
 
             HStack(spacing: 0) {
@@ -219,7 +220,7 @@ struct ClassicMainMenuView: View {
                     // A plain button rather than a tap gesture, so ⌘1/⌘2/⌘3
                     // can reach it; it looks the same.
                     Button {
-                        withAnimation(.easeInOut(duration: 0.15)) {
+                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
                             selectedTab = tab
                         }
                     } label: {
