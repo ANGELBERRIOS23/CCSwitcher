@@ -721,9 +721,10 @@ final class ClaudeService: @unchecked Sendable {
 
                 do {
                     try process.run()
+                    // Drain pipe before waitUntilExit() to prevent >64KB pipe buffer deadlock.
+                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
                     process.waitUntilExit()
 
-                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
                     let output = String(data: data, encoding: .utf8) ?? ""
 
                     if process.terminationStatus == 0 {

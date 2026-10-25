@@ -413,12 +413,14 @@ final class KeychainService: Sendable {
 
         do {
             try process.run()
+            // Drain stdout before waitUntilExit() so a >64KB output cannot fill
+            // the kernel pipe buffer and deadlock the child process.
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()
             guard process.terminationStatus == 0 else {
                 log.debug("[runSecurity] Exit \(process.terminationStatus) for: security \(args.prefix(3).joined(separator: " "))...")
                 return nil
             }
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
             let output = String(data: data, encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             return output?.isEmpty == true ? nil : output

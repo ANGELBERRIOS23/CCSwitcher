@@ -221,13 +221,13 @@ final class AppState: ObservableObject {
             claimedAccountId: claimedId,
             matchingBackupOwner: { [weak self] token in
                 guard let self else { return nil }
-                return self.accounts.first { account in
-                    guard let backup = self.keychain.readAccountBackup(forAccountId: account.id.uuidString),
+                return self.accounts.first(where: { account in
+                    guard let backup = self.keychain.getAccountBackup(forAccountId: account.id.uuidString),
                           let backupToken = ClaudeService.extractAccessToken(from: backup.token) else {
                         return false
                     }
                     return backupToken == token
-                }?.id
+                })?.id
             }
         )
     }
