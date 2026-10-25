@@ -1,119 +1,107 @@
-### Hide the head icon in the menu bar
+### A new look for the menu bar panel
 
-**Settings → Menu Bar → Show head icon in menu bar** switches the brain icon off, so the strip shows only the readings you chose. Useful when your menu bar is crowded.
+The dropdown is now a floating panel in Claude's colours — warm ivory and charcoal surfaces with terracotta accents — that opens from under the menu bar icon and closes with Esc or a click outside. Every tab has been restyled, and the glow at the top of the panel warms toward red as your current session nears its limit. Right-click the menu bar icon for Refresh, Settings and Quit.
 
-### Pick your own limit bar colors (opt-in)
+Accounts that are not active now have a **Switch** button right on the Usage tab, and the Usage tab shows each account's name with its email underneath.
 
-Turn on **Customize limit bar colors** in Settings → Menu Bar and you can set the session bar, the weekly bar, and a low-remaining warning color separately — plus how much quota has to be left before the warning color takes over.
+### The model-specific weekly limit (Fable)
 
-Off by default, and while it is off the bars look exactly as they always have: the menu-bar bars stay monochrome so they follow a light or dark menu bar and turn red only above 90% used, and the Usage dashboard keeps its green / orange / red steps at 60% and 90%.
+Anthropic now applies a third limit: a weekly quota for a single model, such as Fable. CCSwitcher shows it next to the session and weekly limits — in the widget, on the Usage tab, and as optional menu bar items (off by default). Accounts without this limit look exactly as before.
+
+### Log in from any browser
+
+While a login is waiting for you, **Copy Login URL** copies the sign-in link so you can open it in a different browser or profile, and **Cancel** stops the login.
+
+### One email, several organisations
+
+If the same email belongs to more than one Team or organisation, each one is now kept as its own account instead of overwriting the others.
+
+### Usage history is kept for good
+
+Usage and activity history now lives in a local database (`~/Library/Application Support/CCSwitcher/usage.sqlite`). Refreshes only write what changed, instead of rewriting a cache file that could exceed 100 MB, and history is no longer lost when Claude Code deletes old transcripts. Your existing history is imported automatically on first launch, and the old file is left in place.  
+
+### Settings
+
+- **Settings → General → System** lets you turn automatic update checks and automatic downloads on or off.
+- The General tab is shorter: refresh and auto-switch share one section, and *Show full email address* moved under Appearance.
+- Español is now available as an interface language.
+
+### Anonymous launch counts
+
+CCSwitcher now sends one anonymous "app launched" event to [Aptabase](https://aptabase.com), together with Aptabase's standard technical details such as the app and macOS version. No account data, credentials, conversations or usage figures are sent. You can turn it off in **Settings → About → Send anonymous launch counts**; the change applies from the next launch.
+
+### Fixes
+
+- The menu bar could freeze for up to a minute right after launch while the widget's data was being saved for the first time.
+- A switch to an account whose saved login had become empty is now refused before anything is changed, and a switch that fails part-way puts your previous account back instead of signing you out of both.
+- While another Claude Code session was running, usage could be shown on the wrong account card, and a switch could save one account's login under another account's name.
+- The app could hang while waiting for the `claude` command when that command printed a lot of output.
+- Usage lines containing certain Unicode characters were skipped and are now counted.
+- Quitting no longer waits indefinitely for a slow save.
 
 ### Thanks
 
-- **[@kyoubelyu](https://github.com/kyoubelyu)** — the menu bar icon toggle and the custom limit bar colors ([#20](https://github.com/XueshiQiao/CCSwitcher/pull/20)).
-
-### Included from v1.11.0
-
-Released less than an hour before this one, so you may be updating straight past it.
-
-#### Auto-switch before you hit the limit (opt-in)
-
-Turn it on in **Settings → General → Auto-switch** and CCSwitcher moves you to the account with the most quota left once the active one reaches your chosen threshold (default 90%). Off by default — nothing changes unless you enable it.
-
-It checks before it leaps: an account with no recent reading is never chosen, readings whose usage window has already reset are ignored, and the account it picked is re-checked immediately before the switch. After you switch or log in yourself, it leaves your choice alone for five minutes.
-
-#### Usage polling that survives rate limits
-
-The usage endpoint limits requests hard, and polling every account at once tripped it constantly — leaving *API Rate Limited* on screen instead of numbers. Accounts are now polled in turn, rate-limited accounts are left alone until the server says they may be asked again, and the last known figures stay on screen instead of vanishing.
-
-Because of that, a card can be showing a reading from a few minutes ago, so cards now say **"Updated Xm ago"** once a figure is no longer fresh.
-
-Backup accounts also refresh their own sign-in quietly now, instead of sitting in a permanent *Token expired* state between switches.
-
-#### Account switching no longer fails for no reason
-
-Since Claude Code 2.1.x, switching could fail with *"expected you@example.com but got unknown"*, and neither removing the account nor logging in again helped. Nothing was actually wrong: `claude auth status` simply omits the account identity when the CLI is authenticating through something other than your stored claude.ai login — an `ANTHROPIC_AUTH_TOKEN`, an `apiKeyHelper`, a token file, or a third-party provider. CCSwitcher now recognises that, verifies the switch against its own records, and tells you which credential source is taking precedence.
-
-#### Your saved logins are much harder to lose
-
-All accounts' saved logins live in one Keychain record. Previously a single failed *read* of that record — a denied Keychain prompt, a locked screen — was treated as "there is nothing there", and the next save would overwrite the record with just one account, permanently destroying every other account's saved login. The app now refuses to write when it could not read first, so the worst case is "try again shortly" rather than "log in to everything again".
-
-A sign-in that gets renewed but cannot be saved is now reported honestly instead of being silently assumed to have worked, and a login token can no longer end up in the app's log file if Anthropic changes their response format.
-
-#### Fixes
-
-- The app could crash outright when an account or organisation name contained emoji or Chinese characters.
-- Masking now works on the real email field, so non-ASCII and unusual address forms are hidden too — while organisation names that merely look email-shaped are never mangled.
-- Logging into an account you had already added now marks it active immediately, instead of showing the previous account for up to ten minutes.
-- Two account switches, or a switch and a login, can no longer run at once and leave credentials half-swapped.
-- Error messages distinguish "you need to sign in again" from "this is temporary, it will retry".
-- An account with no active subscription now says so, instead of showing a generic failure.
-- Seven interface texts that always appeared in English are now translated in all five languages.
-
-#### Thanks
-
-- **[@AlexDesign420](https://github.com/AlexDesign420)** — traced the switching failure ([#18](https://github.com/XueshiQiao/CCSwitcher/issues/18)) to its root cause in the Claude Code CLI itself and fixed it ([#23](https://github.com/XueshiQiao/CCSwitcher/pull/23)).
-- **[@appalexhu](https://github.com/appalexhu)** — rate-limit-resilient usage polling ([#22](https://github.com/XueshiQiao/CCSwitcher/pull/22)) and proactive auto-switch ([#21](https://github.com/XueshiQiao/CCSwitcher/pull/21)).
+- **[@mcnaveen](https://github.com/mcnaveen)** — the new panel design and the Switch button on the Usage tab ([#42](https://github.com/XueshiQiao/CCSwitcher/pull/42)).
+- **[@chang-feather](https://github.com/chang-feather)** — the model-specific weekly limit and the launch freeze fix ([#31](https://github.com/XueshiQiao/CCSwitcher/pull/31)).
+- **[@rakei076](https://github.com/rakei076)** — tracking which account a login really belongs to ([#25](https://github.com/XueshiQiao/CCSwitcher/issues/25), [#26](https://github.com/XueshiQiao/CCSwitcher/pull/26)).
+- **[@fahrulalwan](https://github.com/fahrulalwan)** — refusing empty saved logins and rolling back failed switches ([#32](https://github.com/XueshiQiao/CCSwitcher/pull/32)).
+- **[@ercgn](https://github.com/ercgn)** — finding the oversized cache rewrites and the quit hang ([#39](https://github.com/XueshiQiao/CCSwitcher/pull/39)).
+- **[@ANGELBERRIOS23](https://github.com/ANGELBERRIOS23)** — the Spanish translation ([#27](https://github.com/XueshiQiao/CCSwitcher/pull/27)).
+- **[@timc13](https://github.com/timc13)**, **[@roc-zjp](https://github.com/roc-zjp)** and **[@alekc](https://github.com/alekc)** — for suggesting login from another browser ([#33](https://github.com/XueshiQiao/CCSwitcher/issues/33)), multi-organisation accounts ([#24](https://github.com/XueshiQiao/CCSwitcher/pull/24)) and the update settings ([#36](https://github.com/XueshiQiao/CCSwitcher/issues/36)).
 
 ---
 
-### 隐藏菜单栏上的头像图标
+### 菜单栏面板换了新样子
 
-在**设置 → Menu Bar → 在菜单栏显示头像图标**中关掉它，菜单栏就只显示你选中的用量数据。菜单栏挤的时候很有用。
+下拉菜单改成了 Claude 配色的浮动面板：暖白和深炭灰的底色，配上陶土橙的点缀。面板从菜单栏图标下方弹出，按 Esc 或点击面板外面就会关闭。所有标签页都重新设计过，面板顶部的光晕会随着当前会话接近限额逐渐变红。右键点击菜单栏图标，可以直接刷新、打开设置或退出。
 
-### 自定义额度条颜色（可选，默认关闭）
+用量标签页上，不是当前账户的卡片现在多了一个**切换**按钮；每个账户会显示名字，邮箱显示在名字下面。
 
-在设置 → Menu Bar 中开启**自定义额度条颜色**后，可以分别设定会话条、每周条、以及剩余额度不足时的警告色，还能调整「剩余多少才算不足」的阈值。
+### 单个模型的每周限额（Fable）
 
-默认关闭，不开启时两个条的外观和以前完全一样：菜单栏里的条保持单色，会跟随菜单栏的明暗自动反色，只在用量超过 90% 时变红；用量面板里的条也保留 60% 与 90% 两档的绿 / 橙 / 红分级。
+Anthropic 现在多了第三种限额：针对单个模型（例如 Fable）的每周额度。CCSwitcher 会把它和会话限额、每周限额放在一起显示：小组件里有，用量标签页里有，菜单栏上也可以选择显示（默认不显示）。没有这项限额的账户，显示和以前完全一样。
+
+### 可以用任意浏览器登录
+
+等待登录的时候，点 **Copy Login URL**（复制登录链接）可以把登录地址复制下来，拿到别的浏览器或别的浏览器账户里打开；点**取消**可以中止这次登录。
+
+### 同一个邮箱属于多个组织
+
+同一个邮箱如果同时属于多个 Team 或组织，现在每个组织会作为单独的账户保存，不会再互相覆盖。
+
+### 用量历史会一直保留
+
+用量和活动历史现在存放在本地数据库里（`~/Library/Application Support/CCSwitcher/usage.sqlite`）。每次刷新只写入有变化的部分，不再整份重写一个可能超过 100 MB 的缓存文件；Claude Code 删掉旧的对话记录之后，这些对话的用量历史也不会跟着消失。第一次启动新版本时会自动导入原有的历史数据，原来的文件会原样保留。
+
+### 设置
+
+- **设置 → 通用 → 系统**里可以分别开关「自动检查更新」和「自动下载更新」。
+- 通用标签页变短了：刷新间隔和自动切换放在同一组里，「显示完整邮箱地址」移到了「外观」下面。
+- 界面语言新增西班牙语（Español）。
+
+### 匿名统计启动次数
+
+CCSwitcher 现在会向 [Aptabase](https://aptabase.com) 发送一个匿名的「App 已启动」事件，附带 Aptabase 默认收集的技术信息，比如 App 版本和 macOS 版本。不会发送任何账户信息、登录凭据、对话内容或用量数据。可以在**设置 → 关于 → 发送匿名启动统计**中关掉，关掉后从下次启动开始生效。
+
+### 缺陷修复
+
+- 刚启动时，小组件数据第一次保存期间，菜单栏可能卡住长达一分钟。
+- 如果某个账户保存的登录信息已经变成空的，切换到这个账户时会在改动任何东西之前直接拒绝；切换中途失败时，会把原来的账户恢复回去，不会再让两个账户都退出登录。
+- 有其他 Claude Code 会话在运行时，用量可能显示到错误的账户卡片上，切换时也可能把一个账户的登录信息存到另一个账户名下。
+- 当 `claude` 命令输出内容很多时，App 可能一直卡在等待这个命令结束。
+- 含有某些 Unicode 字符的用量记录以前会被漏掉，现在能正确统计。
+- 退出 App 时不会再因为保存数据太慢而一直等下去。
 
 ### 致谢
 
-- **[@kyoubelyu](https://github.com/kyoubelyu)** —— 菜单栏图标开关与额度条颜色自定义（[#20](https://github.com/XueshiQiao/CCSwitcher/pull/20)）。
-
-### 包含 v1.11.0 的更新
-
-上一个版本发布至今不到一小时，你可能是直接跳过它更新过来的。
-
-#### 达到限额前自动切换（可选，默认关闭）
-
-在**设置 → General → Auto-switch** 中开启后，当前账户用量达到你设定的阈值（默认 90%）时，CCSwitcher 会自动切换到剩余额度最多的账户。默认关闭，不开启则一切照旧。
-
-它会先核实再动手：没有近期用量数据的账户绝不会被选中，额度窗口已经重置的旧数据一律作废，选定的账户在切换前还会重新查一次。你自己手动切换或登录后，五分钟内它不会推翻你的选择。
-
-#### 用量轮询不再被限流打垮
-
-用量接口的请求频率限制很严，同时查询所有账户会频繁触发，导致界面上只剩 *API 请求频率受限* 而看不到数字。现在改为轮流查询，被限流的账户会等到服务器允许的时间再问，而且最后一次的有效数据会保留在界面上，不会直接消失。
-
-正因为是轮流查询，卡片上的数字可能是几分钟前的，所以数据不再新鲜时会标注 **「X 分钟前更新」**。
-
-备用账户现在也会自动续期自己的登录状态，不会在两次切换之间一直卡在*令牌已过期*。
-
-#### 账户切换不再莫名其妙失败
-
-从 Claude Code 2.1.x 开始，切换有时会失败并提示*「预期 you@example.com，但得到 unknown」*，删除账户重加或重新登录都无济于事。其实什么问题都没有：当 Claude Code 使用的不是你保存的 claude.ai 登录，而是 `ANTHROPIC_AUTH_TOKEN`、`apiKeyHelper`、令牌文件或第三方服务商时，`claude auth status` 就不会返回账户身份。CCSwitcher 现在能识别这种情况，改用自己的记录来核实切换是否成功，并告诉你是哪个凭据来源抢占了优先级。
-
-#### 保存的登录信息不再容易丢失
-
-所有账户的登录信息存放在钥匙串的同一条记录里。以前只要有一次**读取**失败——比如钥匙串弹窗被拒绝、屏幕处于锁定状态——就会被当成「里面什么都没有」，紧接着的一次保存就用仅剩一个账户的内容覆盖整条记录，其他账户的登录信息永久丢失。现在读不到就拒绝写入，最坏情况从「所有账户重新登录一遍」变成「过一会儿自动重试」。
-
-登录信息续期成功但保存失败时，现在会如实告知，不再默认当作成功；即使 Anthropic 修改返回格式，登录令牌也不会再被写进日志文件。
-
-#### 缺陷修复
-
-- 账户名或组织名中含有 emoji、中文时，App 可能直接闪退。
-- 打码改为直接作用于真实的邮箱字段，中文等特殊格式的地址也能隐藏；而只是长得像邮箱的组织名不会再被错误改写。
-- 登录一个已添加过的账户，现在会立即标记为当前账户，不再最长十分钟仍显示旧账户。
-- 两次账户切换、或切换与登录同时进行时，不会再互相干扰导致凭据只换了一半。
-- 错误提示区分「需要重新登录」和「临时问题，会自动重试」。
-- 没有有效订阅的账户会明确提示，不再显示笼统的失败信息。
-- 7 处始终显示英文的界面文字，现已补齐五种语言的翻译。
-
-#### 致谢
-
-- **[@AlexDesign420](https://github.com/AlexDesign420)** —— 将切换失败问题（[#18](https://github.com/XueshiQiao/CCSwitcher/issues/18)）一路追查到 Claude Code CLI 本身的根因并修复（[#23](https://github.com/XueshiQiao/CCSwitcher/pull/23)）。
-- **[@appalexhu](https://github.com/appalexhu)** —— 抗限流的用量轮询（[#22](https://github.com/XueshiQiao/CCSwitcher/pull/22)）与主动自动切换功能（[#21](https://github.com/XueshiQiao/CCSwitcher/pull/21)）。
+- **[@mcnaveen](https://github.com/mcnaveen)** —— 新的面板设计，以及用量标签页上的切换按钮（[#42](https://github.com/XueshiQiao/CCSwitcher/pull/42)）。
+- **[@chang-feather](https://github.com/chang-feather)** —— 单个模型的每周限额，以及修复启动时菜单栏卡住的问题（[#31](https://github.com/XueshiQiao/CCSwitcher/pull/31)）。
+- **[@rakei076](https://github.com/rakei076)** —— 准确判断当前登录信息属于哪个账户（[#25](https://github.com/XueshiQiao/CCSwitcher/issues/25)、[#26](https://github.com/XueshiQiao/CCSwitcher/pull/26)）。
+- **[@fahrulalwan](https://github.com/fahrulalwan)** —— 拒绝切换到登录信息为空的账户，切换失败时自动恢复（[#32](https://github.com/XueshiQiao/CCSwitcher/pull/32)）。
+- **[@ercgn](https://github.com/ercgn)** —— 发现缓存文件被反复整份重写和退出时卡住的问题（[#39](https://github.com/XueshiQiao/CCSwitcher/pull/39)）。
+- **[@ANGELBERRIOS23](https://github.com/ANGELBERRIOS23)** —— 西班牙语翻译（[#27](https://github.com/XueshiQiao/CCSwitcher/pull/27)）。
+- **[@timc13](https://github.com/timc13)**、**[@roc-zjp](https://github.com/roc-zjp)** 和 **[@alekc](https://github.com/alekc)** —— 分别提出了用其他浏览器登录（[#33](https://github.com/XueshiQiao/CCSwitcher/issues/33)）、同一邮箱多个组织（[#24](https://github.com/XueshiQiao/CCSwitcher/pull/24)）和更新设置（[#36](https://github.com/XueshiQiao/CCSwitcher/issues/36)）的建议。
 
 ---
 
-**Full Changelog**: https://github.com/XueshiQiao/CCSwitcher/compare/v1.11.0...v1.12.0
+**Full Changelog**: https://github.com/XueshiQiao/CCSwitcher/compare/v1.12.0...v2.0.0
