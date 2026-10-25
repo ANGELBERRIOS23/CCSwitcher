@@ -183,15 +183,19 @@ final class AppState: ObservableObject {
         }
 
         // Passive token health check (no CLI calls, keychain reads only)
-        diagnoseTokenHealth()
+        await diagnoseTokenHealth()
 
         // Fetch usage limits for all accounts
         await fetchAllAccountUsage()
         lastUsageRefresh = Date()
 
-        usageSummary = statsParser.getUsageSummary()
-        recentActivity = statsParser.getRecentActivity(days: 7)
-        activeSessions = statsParser.getActiveSessions()
+        let statsParser = self.statsParser
+        let (summary, recent, sessions) = await Self.offMain {
+            (statsParser.getUsageSummary(), statsParser.getRecentActivity(days: 7), statsParser.getActiveSessions())
+        }
+        usageSummary = summary
+        recentActivity = recent
+        activeSessions = sessions
 
         do {
             if !hasLoadedUsageHistory {
@@ -301,6 +305,24 @@ final class AppState: ObservableObject {
         let claimedOAuth = keychain.readOAuthAccount()
         let claimedEmail = claimedOAuth?["emailAddress"]?.value as? String
         let claimedOrgId = claimedOAuth?["organizationUuid"]?.value as? String
+        return resolveLiveCredentialOwner(accessToken: accessToken, claimedEmail: claimedEmail, claimedOrgId: claimedOrgId)
+    }
+
+    /// `liveCredentialOwner()` with its two reads (a `security` subprocess and
+    /// a parse of ~/.claude.json) done off the main actor, for the refresh
+    /// cycle. Resolving against the anchor still happens here.
+    private func liveCredentialOwnerReadingOffMain() async -> LiveCredentialOwner {
+        let keychain = self.keychain
+        let (accessToken, claimedEmail, claimedOrgId) = await Self.offMain {
+            let claimedOAuth = keychain.readOAuthAccount()
+            return (keychain.readClaudeToken().flatMap(ClaudeService.extractAccessToken(from:)),
+                    claimedOAuth?["emailAddress"]?.value as? String,
+                    claimedOAuth?["organizationUuid"]?.value as? String)
+        }
+        return resolveLiveCredentialOwner(accessToken: accessToken, claimedEmail: claimedEmail, claimedOrgId: claimedOrgId)
+    }
+
+    private func resolveLiveCredentialOwner(accessToken: String?, claimedEmail: String?, claimedOrgId: String?) -> LiveCredentialOwner {
         let claimedId = claimedEmail.flatMap { email in
             matchAccountIndex(email: email, orgId: claimedOrgId).map { accounts[$0].id }
         }
@@ -331,6 +353,13 @@ final class AppState: ObservableObject {
         guard let tokenJSON = keychain.readClaudeToken(),
               let accessToken = ClaudeService.extractAccessToken(from: tokenJSON) else { return }
         credentialAnchor.anchor(accountId: accountId, accessToken: accessToken)
+    }
+
+    /// Run blocking keychain / file reads off the main actor. The keychain
+    /// helpers wait on a `security` subprocess or a keychain query, and the
+    /// UI would stall for as long as they take.
+    private nonisolated static func offMain<T: Sendable>(_ read: @escaping @Sendable () -> T) async -> T {
+        await Task.detached(priority: .userInitiated, operation: read).value
     }
 
     /// Back up the live credential as `account`'s, but only when both the live
@@ -1145,7 +1174,8 @@ final class AppState: ObservableObject {
         // account, and only that account's card may be filled from it. Reading
         // it for whoever the identity block currently names is what put one
         // account's percentages on the other's card for hours.
-        let liveCredentialOwnerId = liveCredentialOwner().credentialAccountId
+        let liveCredentialOwnerId = await liveCredentialOwnerReadingOffMain().credentialAccountId
+        let keychain = self.keychain
 
         var isFirstRequest = true
         for account in targets {
@@ -1163,9 +1193,10 @@ final class AppState: ObservableObject {
                     accountUsageErrors[account.id] = UsageErrorState(isExpired: false, isRateLimited: false, message: String(localized: "Can't tell which account the current sign-in belongs to. Switch accounts once to re-sync.", bundle: L10n.bundle))
                     continue
                 }
-                tokenJSON = keychain.readClaudeToken()
+                tokenJSON = await Self.offMain { keychain.readClaudeToken() }
             } else {
-                tokenJSON = keychain.getAccountBackup(forAccountId: account.id.uuidString)?.token
+                let accountId = account.id.uuidString
+                tokenJSON = await Self.offMain { keychain.getAccountBackup(forAccountId: accountId)?.token }
             }
             guard let tokenJSON, let accessToken = ClaudeService.extractAccessToken(from: tokenJSON) else {
                 log.warning("[fetchUsage] No token for \(account.email), skipping")
@@ -1208,7 +1239,7 @@ final class AppState: ObservableObject {
                         // re-anchor to the same account — otherwise the anchor
                         // goes stale and the next cycle falls back to believing
                         // the identity block again.
-                        if let refreshedJSON = keychain.readClaudeToken(),
+                        if let refreshedJSON = await Self.offMain({ keychain.readClaudeToken() }),
                            let refreshedToken = ClaudeService.extractAccessToken(from: refreshedJSON) {
                             credentialAnchor.anchor(accountId: account.id, accessToken: refreshedToken)
                             if let usage = await usageRespectingParking(accessToken: refreshedToken, account: account) {
@@ -1275,15 +1306,29 @@ final class AppState: ObservableObject {
     }
 
     /// Passive health check — verifies backup existence and identity consistency.
-    private func diagnoseTokenHealth() {
+    /// Logging only; its keychain and ~/.claude.json reads run off the main actor.
+    private func diagnoseTokenHealth() async {
+        let accounts = self.accounts
         guard !accounts.isEmpty else { return }
 
         log.info("[diagnose] === Health Check ===")
-        log.info("[diagnose] Accounts: \(self.accounts.count), active: \(self.activeAccount?.email ?? "none")")
+        log.info("[diagnose] Accounts: \(accounts.count), active: \(self.activeAccount?.email ?? "none")")
+
+        let keychain = self.keychain
+        let accountIds = accounts.map(\.id.uuidString)
+        let (liveEmail, backups) = await Self.offMain {
+            let liveEmail = keychain.readOAuthAccount().map { ($0["emailAddress"]?.value as? String) ?? "?" }
+            let backups = accountIds.map { id in
+                keychain.getAccountBackup(forAccountId: id).map { backup in
+                    (email: (backup.oauthAccount["emailAddress"]?.value as? String) ?? "?",
+                     usable: backup.hasUsableCredentials)
+                }
+            }
+            return (liveEmail, backups)
+        }
 
         // Check live oauthAccount identity
-        if let liveOAuth = keychain.readOAuthAccount() {
-            let liveEmail = (liveOAuth["emailAddress"]?.value as? String) ?? "?"
+        if let liveEmail {
             log.info("[diagnose] Live oauthAccount: \(liveEmail)")
         } else {
             log.warning("[diagnose] Live oauthAccount: MISSING")
@@ -1293,24 +1338,23 @@ final class AppState: ObservableObject {
         // credential is actually sitting next to it. When they disagree, every
         // number on the cards is suspect — say so here rather than leaving it
         // to be reconstructed from percentages later.
-        switch liveCredentialOwner() {
+        switch await liveCredentialOwnerReadingOffMain() {
         case .owned(let id):
-            log.info("[diagnose] Live credential belongs to: \(self.accounts.first(where: { $0.id == id })?.email ?? id.uuidString)")
+            log.info("[diagnose] Live credential belongs to: \(accounts.first(where: { $0.id == id })?.email ?? id.uuidString)")
         case .desynced(_, let credential):
-            log.warning("[diagnose] DESYNCED: identity block and live credential disagree; credential is \(self.accounts.first(where: { $0.id == credential })?.email ?? credential.uuidString)'s")
+            log.warning("[diagnose] DESYNCED: identity block and live credential disagree; credential is \(accounts.first(where: { $0.id == credential })?.email ?? credential.uuidString)'s")
         case .unknown:
             log.warning("[diagnose] Live credential owner: UNKNOWN")
         }
 
         // Check each account has a backup
-        for account in accounts {
-            if let backup = keychain.getAccountBackup(forAccountId: account.id.uuidString) {
-                let backupEmail = (backup.oauthAccount["emailAddress"]?.value as? String) ?? "?"
+        for (account, backup) in zip(accounts, backups) {
+            if let backup {
                 // The email lives in `oauthAccount`, and an emptied backup keeps
                 // that block intact, so checking it alone reports a backup that
                 // cannot log anyone in as healthy.
-                if backup.hasUsableCredentials {
-                    log.info("[diagnose] Backup [\(account.email)]: OK (email=\(backupEmail))")
+                if backup.usable {
+                    log.info("[diagnose] Backup [\(account.email)]: OK (email=\(backup.email))")
                 } else {
                     log.warning("[diagnose] Backup [\(account.email)]: EMPTY — metadata is intact but the token carries no OAuth secret; switch will fail until re-authenticated")
                 }
