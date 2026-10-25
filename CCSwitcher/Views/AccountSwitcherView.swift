@@ -158,17 +158,17 @@ struct AccountSwitcherView: View {
                     Label("Login New Account", systemImage: "person.badge.plus")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(PrimaryButtonStyle(height: 38))
+                .buttonStyle(PrimaryButtonStyle(height: 38, fillsWidth: true))
                 .focusable(false)
 
-                // Secondary: Capture already-logged-in account
+                // Capture already-logged-in account
                 Button {
                     showingAddConfirm = true
                 } label: {
                     Label("Add Current Account", systemImage: "plus.circle")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(SecondaryButtonStyle())
+                .buttonStyle(PrimaryButtonStyle(height: 38, fillsWidth: true))
                 .focusable(false)
             }
             .transition(.opacity)
