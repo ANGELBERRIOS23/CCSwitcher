@@ -296,46 +296,51 @@ final class UsageDatabase: Sendable {
                         } else { ambiguousAnonymousUpgrade = true }
                     }
                 }
-                let unsafe = ambiguousAnonymousUpgrade || (oldSize.map { signature.size < $0 } ?? false)
-                    || (oldIdentity.map { $0 != signature.identity } ?? false)
-                    || (oldHash.map { $0 != parsed.prefixHash } ?? false)
-                    || (oldSession != nil && parsed.sessionId != oldSession)
-                    || !Set(existing.keys).isSubset(of: Set(incoming.map(\.key)))
-                    || !Set(oldDays.keys).isSubset(of: Set(parsed.activityByDate.keys))
-                    || (oldHash == nil && oldDays.contains { date, raw in
-                        guard let old = raw as? [String: Any], let new = parsed.activityByDate[date] else { return true }
-                        if new.turns < (old["turns"] as? Int ?? 0)
-                            || new.activeMinutes < (old["active_minutes"] as? Int ?? 0)
-                            || new.linesWritten < (old["lines_written"] as? Int ?? 0) { return true }
-                        for (tool, count) in old["tool_counts"] as? [String: Int] ?? [:] where new.toolCounts[tool, default: 0] < count { return true }
-                        for (model, count) in old["model_counts"] as? [String: Int] ?? [:] where new.modelCounts[model, default: 0] < count { return true }
-                        return false
-                    })
-                    || incoming.contains { pair in
-                        guard let old = existing[pair.key] else { return false }
-                        let oldOutput: Int = old["output_tokens"]
-                        if pair.entry.output < oldOutput { return true }
-                        if pair.entry.input != (old["input_tokens"] as Int)
-                            || pair.entry.cw != (old["cache_creation_tokens"] as Int)
-                            || pair.entry.cw1h != (old["cache_creation_1h_tokens"] as Int)
-                            || pair.entry.cr != (old["cache_read_tokens"] as Int)
-                            || pair.entry.model != (old["model"] as String)
-                            || pair.entry.speed != (old["speed"] as String?) { return true }
-                        if oldZone == nil, pair.entry.date != (old["local_date"] as String) { return true }
-                        // Without IDs, ordinal alone is not evidence for changing
-                        // an already-stored row; require the original usage match.
-                        if pair.entry.hash == nil {
-                            return pair.entry.input != (old["input_tokens"] as Int)
-                                || pair.entry.output != oldOutput
-                                || pair.entry.cw != (old["cache_creation_tokens"] as Int)
-                                || pair.entry.cw1h != (old["cache_creation_1h_tokens"] as Int)
-                                || pair.entry.cr != (old["cache_read_tokens"] as Int)
-                                || pair.entry.model != (old["model"] as String)
-                                || pair.entry.date != (old["local_date"] as String)
-                                || pair.entry.speed != (old["speed"] as String?)
-                        }
-                        return false
+                // Split into typed parts: as one expression the Release build's
+                // type checker gives up ("unable to type-check ... in reasonable time").
+                let shrank: Bool = oldSize.map { signature.size < $0 } ?? false
+                let identityChanged: Bool = oldIdentity.map { $0 != signature.identity } ?? false
+                let prefixChanged: Bool = oldHash.map { $0 != parsed.prefixHash } ?? false
+                let sessionChanged: Bool = oldSession != nil && parsed.sessionId != oldSession
+                let lostRecords: Bool = !Set(existing.keys).isSubset(of: Set(incoming.map(\.key)))
+                let lostDays: Bool = !Set(oldDays.keys).isSubset(of: Set(parsed.activityByDate.keys))
+                let activityShrank: Bool = oldHash == nil && oldDays.contains { (date: String, raw: Any) -> Bool in
+                    guard let old = raw as? [String: Any], let new = parsed.activityByDate[date] else { return true }
+                    let oldTurns: Int = old["turns"] as? Int ?? 0
+                    let oldMinutes: Int = old["active_minutes"] as? Int ?? 0
+                    let oldLines: Int = old["lines_written"] as? Int ?? 0
+                    if new.turns < oldTurns || new.activeMinutes < oldMinutes || new.linesWritten < oldLines { return true }
+                    let oldTools: [String: Int] = old["tool_counts"] as? [String: Int] ?? [:]
+                    for (tool, count) in oldTools where new.toolCounts[tool, default: 0] < count { return true }
+                    let oldModels: [String: Int] = old["model_counts"] as? [String: Int] ?? [:]
+                    for (model, count) in oldModels where new.modelCounts[model, default: 0] < count { return true }
+                    return false
+                }
+                let recordConflicts: Bool = incoming.contains { pair -> Bool in
+                    guard let old = existing[pair.key] else { return false }
+                    let oldInput: Int = old["input_tokens"]
+                    let oldOutput: Int = old["output_tokens"]
+                    let oldCacheWrite: Int = old["cache_creation_tokens"]
+                    let oldCacheWrite1h: Int = old["cache_creation_1h_tokens"]
+                    let oldCacheRead: Int = old["cache_read_tokens"]
+                    let oldModel: String = old["model"]
+                    let oldSpeed: String? = old["speed"]
+                    let oldDate: String = old["local_date"]
+                    if pair.entry.output < oldOutput { return true }
+                    let sameTokens: Bool = pair.entry.input == oldInput && pair.entry.cw == oldCacheWrite
+                        && pair.entry.cw1h == oldCacheWrite1h && pair.entry.cr == oldCacheRead
+                    let sameLabels: Bool = pair.entry.model == oldModel && pair.entry.speed == oldSpeed
+                    if !sameTokens || !sameLabels { return true }
+                    if oldZone == nil, pair.entry.date != oldDate { return true }
+                    // Without IDs, ordinal alone is not evidence for changing
+                    // an already-stored row; require the original usage match.
+                    if pair.entry.hash == nil {
+                        return pair.entry.output != oldOutput || pair.entry.date != oldDate
                     }
+                    return false
+                }
+                let unsafe: Bool = ambiguousAnonymousUpgrade || shrank || identityChanged || prefixChanged
+                    || sessionChanged || lostRecords || lostDays || activityShrank || recordConflicts
                 if unsafe {
                     try db.execute(sql: "UPDATE session_files SET source_status = 'needs_review', updated_at_us = ? WHERE id = ? AND source_status != 'needs_review'", arguments: [Self.now(), id])
                     return false
