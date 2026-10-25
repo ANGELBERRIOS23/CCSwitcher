@@ -1031,6 +1031,7 @@ final class AppState: ObservableObject {
         let widgetAccounts = accounts.map { account in
             let usage = accountUsage[account.id]
             let error = accountUsageErrors[account.id]
+            let modelWeekly = usage?.modelScopedWeekly
             return WidgetAccountData(
                 email: account.displayEmail(obfuscated: !UserDefaults.standard.bool(forKey: "showFullEmail")),
                 displayName: account.effectiveDisplayName(obfuscated: !UserDefaults.standard.bool(forKey: "showFullEmail")),
@@ -1040,6 +1041,9 @@ final class AppState: ObservableObject {
                 sessionResetTime: usage?.fiveHour?.resetTimeString,
                 weeklyUtilization: usage?.sevenDay?.utilization,
                 weeklyResetTime: usage?.sevenDay?.resetTimeString,
+                modelWeeklyLabel: modelWeekly?.modelName,
+                modelWeeklyUtilization: modelWeekly?.window.utilization,
+                modelWeeklyResetTime: modelWeekly?.window.resetTimeString,
                 extraUsageEnabled: usage?.extraUsage?.isEnabled,
                 hasError: error != nil,
                 errorMessage: error?.message
@@ -1055,9 +1059,15 @@ final class AppState: ObservableObject {
             modelUsage: activityStats.modelUsage,
             lastUpdated: Date()
         )
-        data.save()
-        WidgetCenter.shared.reloadAllTimelines()
-        log.debug("[updateWidgetData] Widget data saved and timelines reloaded")
+        // The payload is built on the main actor (it reads @Published state),
+        // but the write itself must not be: the first write into the App Group
+        // container after launch can block in `open()` for tens of seconds,
+        // which used to freeze the menu bar for exactly that long.
+        Task.detached(priority: .utility) {
+            await data.saveInBackground()
+            WidgetCenter.shared.reloadAllTimelines()
+            log.debug("[updateWidgetData] Widget data saved and timelines reloaded")
+        }
     }
 
     // MARK: - Persistence
