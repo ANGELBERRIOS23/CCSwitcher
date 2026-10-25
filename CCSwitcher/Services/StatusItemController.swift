@@ -129,7 +129,12 @@ final class StatusItemController: NSObject {
                 appState: appState,
                 config: config,
                 onWidth: { [weak statusItem] width in
-                    statusItem?.length = max(width, 1)
+                    // Every assignment re-lays out the status item, even an
+                    // unchanged one, and the strip is rebuilt on each change.
+                    let length = max(width, 1)
+                    if let statusItem, statusItem.length != length {
+                        statusItem.length = length
+                    }
                 }
             )
             .environment(\.locale, locale)
