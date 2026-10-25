@@ -124,6 +124,9 @@ final class AppState: ObservableObject {
     private var lastAutoSwitchAt: Date?
     private var isEvaluatingAutoSwitch = false
 
+    /// The widget payload the timelines were last reloaded for.
+    private var lastReloadedWidgetData: WidgetData?
+
     // MARK: - Initialization
 
     init() {
@@ -1353,12 +1356,19 @@ final class AppState: ObservableObject {
             modelUsage: activityStats.modelUsage,
             lastUpdated: Date()
         )
+        // A reload makes WidgetKit re-render every placed widget and counts
+        // against the system's reload budget, so only ask for one when what
+        // the widget shows changed. The file is still rewritten every time,
+        // so the widget's own periodic reload picks up the newer timestamp.
+        let reload = lastReloadedWidgetData.map { !data.hasSameContent(as: $0) } ?? true
+        if reload { lastReloadedWidgetData = data }
         // The payload is built on the main actor (it reads @Published state),
         // but the write itself must not be: the first write into the App Group
         // container after launch can block in `open()` for tens of seconds,
         // which used to freeze the menu bar for exactly that long.
         Task.detached(priority: .utility) {
             await data.saveInBackground()
+            guard reload else { return }
             WidgetCenter.shared.reloadAllTimelines()
             log.debug("[updateWidgetData] Widget data saved and timelines reloaded")
         }
