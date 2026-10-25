@@ -62,6 +62,13 @@ final class AppState: ObservableObject {
 
     private let accountsKey = "com.ccswitcher.accounts"
     private var refreshTimer: Timer?
+    /// The auto-refresh interval while auto-refresh is on.
+    private var autoRefreshInterval: TimeInterval?
+    /// When the refresh timer was next due as the Mac went to sleep. The timer
+    /// is stopped while asleep, so it cannot fire in a dark wake (Power Nap)
+    /// and make requests nobody will see; on wake it picks up from here.
+    private var refreshDueBeforeSleep: Date?
+    private var sleepWakeObservers: [NSObjectProtocol] = []
     private var hasLoadedUsageHistory = false
 
     // MARK: - Usage polling state
@@ -215,17 +222,67 @@ final class AppState: ObservableObject {
 
     func startAutoRefresh(interval: TimeInterval = 300) {
         stopAutoRefresh()
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            Task { @MainActor in
-                await self.refresh()
-            }
-        }
+        autoRefreshInterval = interval
+        scheduleRefreshTimer(firstFire: Date().addingTimeInterval(interval), interval: interval)
+        observeSleepAndWake()
     }
 
     func stopAutoRefresh() {
         refreshTimer?.invalidate()
         refreshTimer = nil
+        autoRefreshInterval = nil
+        refreshDueBeforeSleep = nil
+    }
+
+    private func scheduleRefreshTimer(firstFire: Date, interval: TimeInterval) {
+        let timer = Timer(fire: firstFire, interval: interval, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                await self.refresh()
+            }
+        }
+        // A refresh need not be punctual; tolerance lets the system batch the
+        // wake-up with other timers.
+        timer.tolerance = interval / 10
+        RunLoop.main.add(timer, forMode: .default)
+        refreshTimer = timer
+    }
+
+    private func observeSleepAndWake() {
+        guard sleepWakeObservers.isEmpty else { return }
+        let center = NSWorkspace.shared.notificationCenter
+        sleepWakeObservers = [
+            center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.pauseAutoRefreshForSleep() }
+            },
+            center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.resumeAutoRefreshAfterWake() }
+            },
+        ]
+    }
+
+    private func pauseAutoRefreshForSleep() {
+        guard let timer = refreshTimer else { return }
+        refreshDueBeforeSleep = timer.fireDate
+        timer.invalidate()
+        refreshTimer = nil
+        log.info("[autoRefresh] Paused for sleep")
+    }
+
+    private func resumeAutoRefreshAfterWake() {
+        guard refreshTimer == nil, let interval = autoRefreshInterval,
+              let due = refreshDueBeforeSleep else { return }
+        refreshDueBeforeSleep = nil
+        if due <= Date() {
+            // A refresh fell due while asleep. The timer used to fire it on
+            // wake, so run it now and count the next interval from here.
+            log.info("[autoRefresh] Resumed after wake; refreshing now")
+            scheduleRefreshTimer(firstFire: Date().addingTimeInterval(interval), interval: interval)
+            Task { await refresh() }
+        } else {
+            log.info("[autoRefresh] Resumed after wake")
+            scheduleRefreshTimer(firstFire: due, interval: interval)
+        }
     }
 
     // MARK: - Credential ownership
