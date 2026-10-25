@@ -175,6 +175,109 @@ final class UsageDatabaseTests: XCTestCase {
         return try JSONSerialization.data(withJSONObject: row) + Data("\n".utf8)
     }
 
+    private func unicodeTranscript(newline: String) throws -> Data {
+        var text = String(decoding: try transcript(2), as: UTF8.self).trimmingCharacters(in: .newlines)
+        var final = try XCTUnwrap(JSONSerialization.jsonObject(with: transcript(9)) as? [String: Any])
+        var message = try XCTUnwrap(final["message"] as? [String: Any])
+        message["content"] = [["type": "text", "text": "alpha\u{2028}beta\u{2029}gamma\u{0085}delta"]]
+        final["message"] = message
+        var encoded = String(decoding: try JSONSerialization.data(withJSONObject: final), as: UTF8.self)
+        for scalar in ["2028", "2029", "0085"] {
+            encoded = encoded.replacingOccurrences(of: "\\u" + scalar, with: String(UnicodeScalar(UInt32(scalar, radix: 16)!)!))
+        }
+        XCTAssertTrue(encoded.contains("\u{2028}"))
+        XCTAssertTrue(encoded.contains("\u{2029}"))
+        XCTAssertTrue(encoded.contains("\u{0085}"))
+        text += newline + encoded + newline
+        return Data(text.utf8)
+    }
+
+    func testJSONLUsesLFBytesAndPreservesUnicodeSeparatorsInStrings() throws {
+        let path = root.appendingPathComponent("unicode.jsonl")
+        for newline in ["\n", "\r\n"] {
+            try unicodeTranscript(newline: newline).write(to: path)
+            let parsed = try XCTUnwrap(parseSessionFile(at: path.path, relativePath: "unicode.jsonl", mtime: 1, timezone: utc))
+            XCTAssertEqual(parsed.entries.count, 1)
+            XCTAssertEqual(parsed.entries.first?.output, 9)
+            XCTAssertEqual(parsed.activityByDate["2026-10-25"]?.modelCounts.values.reduce(0, +), 1)
+        }
+    }
+
+    func testParserUpgradeRepairsStoredPartialUsageWithoutSourceChanges() async throws {
+        XCTAssertGreaterThan(SessionUsageStore.parserVersion, 1)
+        let path = root.appendingPathComponent("unicode.jsonl")
+        try unicodeTranscript(newline: "\r\n").write(to: path)
+        let signature = try SessionFileSignature.read(path.path)
+        let parsed = try XCTUnwrap(parseSessionFile(at: path.path, relativePath: "unicode.jsonl", mtime: Double(signature.mtime) / 1_000_000_000, timezone: utc))
+        var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(parsed)) as? [String: Any])
+        var entries = try XCTUnwrap(raw["entries"] as? [[String: Any]])
+        entries[0]["output"] = 2
+        raw["entries"] = entries
+        let partial = try JSONDecoder().decode(CachedFileV2.self, from: JSONSerialization.data(withJSONObject: raw))
+        let db = try database()
+        XCTAssertTrue(try db.synchronize(relativePath: "unicode.jsonl", parsed: partial, signature: signature, parserVersion: 1))
+        let oldID = try db.files().values.first?.id
+        let store = SessionUsageStore(databaseURL: databaseURL, projectsRoot: root, timezone: utc)
+        let warning = try await store.refreshLocalFiles()
+        XCTAssertNil(warning)
+        XCTAssertEqual(try db.winners().first?.entry.output, 9)
+        XCTAssertEqual(try db.files().values.first?.id, oldID)
+        XCTAssertEqual(try db.files().values.first?.parserVersion, SessionUsageStore.parserVersion)
+        XCTAssertEqual(try scalar(db, "SELECT COUNT(*) FROM usage_records"), 1)
+    }
+
+    func testParserUpgradeRealignsAnonymousRowsAndPreservesExtensions() async throws {
+        try await verifyAnonymousUpgrade(outputs: [2, 9, 4], accepted: true)
+    }
+
+    func testParserUpgradeRejectsAmbiguousAnonymousAlignment() async throws {
+        try await verifyAnonymousUpgrade(outputs: [2, 2, 2], accepted: false)
+    }
+
+    func testLegacyJSONUpgradeRealignsRecoveredAnonymousRows() async throws {
+        try await verifyAnonymousUpgrade(outputs: [2, 9, 4], accepted: true, legacy: true)
+    }
+
+    func testLegacyJSONUpgradeRetainsAmbiguousAnonymousRows() async throws {
+        try await verifyAnonymousUpgrade(outputs: [2, 2, 2], accepted: false, legacy: true)
+    }
+
+    private func verifyAnonymousUpgrade(outputs: [Int], accepted: Bool, legacy: Bool = false) async throws {
+        let path = root.appendingPathComponent("anonymous.jsonl")
+        var data = Data()
+        for output in outputs {
+            var row = try XCTUnwrap(JSONSerialization.jsonObject(with: transcript(output)) as? [String: Any])
+            row.removeValue(forKey: "requestId")
+            data += try JSONSerialization.data(withJSONObject: row) + Data([0x0A])
+        }
+        try data.write(to: path)
+        let signature = try SessionFileSignature.read(path.path)
+        let parsed = try XCTUnwrap(parseSessionFile(at: path.path, relativePath: "anonymous.jsonl", mtime: 1, timezone: utc))
+        var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(parsed)) as? [String: Any])
+        var oldEntries = try XCTUnwrap(raw["entries"] as? [[String: Any]])
+        oldEntries.remove(at: 1) // V1 skipped the middle row; V2 now recovers it.
+        if legacy { oldEntries = oldEntries.map { $0.filter { $0.key != "timestampUnix" } } }
+        raw["entries"] = oldEntries
+        let partial = try JSONDecoder().decode(CachedFileV2.self, from: JSONSerialization.data(withJSONObject: raw))
+        let db: UsageDatabase
+        if legacy {
+            let legacyURL = directory.appendingPathComponent("legacy.json")
+            try JSONSerialization.data(withJSONObject: ["version":3,"files":[path.path:raw]]).write(to: legacyURL)
+            db = try database(legacy: legacyURL)
+        } else {
+            db = try database()
+            XCTAssertTrue(try db.synchronize(relativePath: "anonymous.jsonl", parsed: partial, signature: signature, parserVersion: 1))
+        }
+        try db.testingWrite { try $0.execute(sql: "UPDATE usage_records SET extensions_json=json_set(extensions_json,'$.future_marker','preserved') WHERE record_key='anonymous:1'") }
+        let oldID = try db.read { try Int64.fetchOne($0, sql: "SELECT id FROM usage_records WHERE record_key='anonymous:1'") }
+        let store = SessionUsageStore(databaseURL: databaseURL, projectsRoot: root, timezone: utc)
+        let warning = try await store.refreshLocalFiles()
+        XCTAssertEqual(warning == nil, accepted)
+        XCTAssertEqual(try db.winners().count, accepted ? 3 : 2)
+        XCTAssertEqual(try db.files().values.first?.parserVersion, accepted ? 2 : (legacy ? 0 : 1))
+        XCTAssertEqual(try db.read { try String.fetchOne($0, sql: "SELECT record_key FROM usage_records WHERE id=? AND json_extract(extensions_json,'$.future_marker')='preserved'", arguments: [oldID]) }, accepted ? "anonymous:2" : "anonymous:1")
+    }
+
     func testScanningUnchangedFilesMakesNoBusinessWritesAndRenameDoesNotDuplicate() async throws {
         let path = root.appendingPathComponent("project/a.jsonl")
         try FileManager.default.createDirectory(at: path.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -209,6 +312,60 @@ final class UsageDatabaseTests: XCTestCase {
         let warning5 = try await store.refreshLocalFiles()
         XCTAssertNotNil(warning5)
         XCTAssertEqual(try scalar(database(), "SELECT COUNT(*) FROM session_files"), 1)
+    }
+
+    func testResumeFileWithSharedIDsIncludesNewUsage() async throws {
+        try transcript(2, id: "shared").write(to: root.appendingPathComponent("first.jsonl"))
+        let store = SessionUsageStore(databaseURL: databaseURL, projectsRoot: root, timezone: utc)
+        let firstWarning = try await store.refreshLocalFiles()
+        XCTAssertNil(firstWarning)
+        try (transcript(9, id: "shared") + transcript(15, id: "followup")).write(to: root.appendingPathComponent("resume.jsonl"))
+        let warning = try await store.refreshLocalFiles()
+        XCTAssertNil(warning)
+        let db = try database()
+        XCTAssertEqual(try db.winners().count, 2)
+        XCTAssertEqual(try db.winners().first { $0.entry.hash == "shared:request-shared" }?.entry.output, 9)
+        XCTAssertTrue(try db.files().values.allSatisfy { $0.status == "present" })
+    }
+
+    func testInvalidSourceConstraintDoesNotPreventOtherFilesAndRetriesChanges() async throws {
+        let bad = root.appendingPathComponent("a-invalid.jsonl")
+        try transcript(-1, id: "invalid").write(to: bad)
+        try transcript(12, id: "valid").write(to: root.appendingPathComponent("z-valid.jsonl"))
+        let store = SessionUsageStore(databaseURL: databaseURL, projectsRoot: root, timezone: utc)
+        let warning = try await store.refreshLocalFiles()
+        XCTAssertNotNil(warning)
+        XCTAssertEqual(try database().winners().first?.entry.output, 12)
+        let repeatedWarning = try await store.refreshLocalFiles()
+        XCTAssertNotNil(repeatedWarning)
+        try transcript(13, id: "repaired").write(to: bad)
+        let repairedWarning = try await store.refreshLocalFiles()
+        XCTAssertNil(repairedWarning)
+        XCTAssertEqual(try database().winners().count, 2)
+    }
+
+    func testNeedsReviewSourceIsVerifiedAgainEvenWithMatchingAcceptedSignature() async throws {
+        let path = root.appendingPathComponent("a.jsonl")
+        try transcript(12).write(to: path)
+        let store = SessionUsageStore(databaseURL: databaseURL, projectsRoot: root, timezone: utc)
+        _ = try await store.refreshLocalFiles()
+        let db = try database()
+        let state = try XCTUnwrap(db.files().values.first)
+        try db.setStatus(id: state.id, status: "needs_review")
+        let warning = try await store.refreshLocalFiles()
+        XCTAssertNil(warning)
+        XCTAssertEqual(try db.files().values.first?.status, "present")
+        XCTAssertEqual(try db.winners().count, 1)
+    }
+
+    func testRelocationPreservesNeedsReviewStatus() throws {
+        let db = try database()
+        try save(db, "old.jsonl", file([entry()]))
+        let state = try XCTUnwrap(db.files().values.first)
+        try db.setStatus(id: state.id, status: "needs_review")
+        try db.relocate(try XCTUnwrap(db.file(at: state.path)), relativePath: "renamed.jsonl")
+        XCTAssertEqual(try db.files().values.first?.status, "needs_review")
+        XCTAssertEqual(try db.winners().count, 1)
     }
 
     func testReportingTimezoneSurvivesDifferentSystemPreference() throws {
@@ -335,6 +492,29 @@ final class UsageDatabaseTests: XCTestCase {
         XCTAssertEqual(try db.winners().count, 2)
     }
 
+    func testArchivedCopyWithNewIdentityAndAppendCannotDuplicateAnonymousHistory() async throws {
+        let original = root.appendingPathComponent("original.jsonl")
+        var anonymous = try XCTUnwrap(JSONSerialization.jsonObject(with: transcript(10)) as? [String: Any])
+        anonymous.removeValue(forKey: "requestId")
+        try (JSONSerialization.data(withJSONObject: anonymous) + Data([0x0A])).write(to: original)
+        let store = SessionUsageStore(databaseURL: databaseURL, projectsRoot: root, timezone: utc)
+        _ = try await store.refreshLocalFiles()
+        let oldIdentity = try SessionFileSignature.read(original.path).identity
+        let copied = root.appendingPathComponent("copied.jsonl")
+        try FileManager.default.copyItem(at: original, to: copied)
+        try FileManager.default.removeItem(at: original)
+        let handle = try FileHandle(forWritingTo: copied)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: transcript(20, id: "new-after-copy"))
+        try handle.close()
+        XCTAssertNotEqual(oldIdentity, try SessionFileSignature.read(copied.path).identity)
+        let warning = try await store.refreshLocalFiles()
+        XCTAssertNotNil(warning)
+        let db = try database()
+        XCTAssertEqual(try db.winners().count, 1)
+        XCTAssertEqual(try scalar(db, "SELECT COUNT(*) FROM session_files"), 1)
+    }
+
     func testUnknownLegacyTimezoneCannotSilentlyMoveDateBuckets() throws {
         let legacy = directory.appendingPathComponent("legacy.json")
         var raw = try JSONSerialization.jsonObject(with: legacyData()) as! [String: Any]
@@ -459,6 +639,8 @@ final class UsageDatabaseTests: XCTestCase {
     func testReplacementPreservingSizeAndMtimeCannotUseFastPath() async throws {
         let path = root.appendingPathComponent("a.jsonl")
         try transcript(10).write(to: path)
+        // Whole seconds survive Date/Double round-trips when restoring mtime.
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1_790_000_000)], ofItemAtPath: path.path)
         let store = SessionUsageStore(databaseURL: databaseURL, projectsRoot: root, timezone: utc)
         _ = try await store.refreshLocalFiles()
         let attributes = try FileManager.default.attributesOfItem(atPath: path.path)

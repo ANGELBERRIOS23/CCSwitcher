@@ -7,7 +7,8 @@ private let log = FileLog("UsageStore")
 /// when Claude cleans its JSONL files. No application credentials are stored here.
 actor SessionUsageStore {
     static let shared = SessionUsageStore()
-    static let parserVersion = 1
+    // Version 2 reparses unchanged sources to recover rows containing Unicode separators.
+    static let parserVersion = 2
     static let timezonePreference = "usageReportingTimezone"
 
     private let databaseURL: URL
@@ -16,6 +17,8 @@ actor SessionUsageStore {
     private let preferredTimezone: TimeZone
     private let persistTimezonePreference: Bool
     private var storage: UsageDatabase?
+    // Retry rejected files when their signature changes, once per process otherwise.
+    private var rejectedSources: [String: SessionFileSignature] = [:]
 
     init(databaseURL: URL? = nil, projectsRoot: URL? = nil, legacyURL: URL? = nil, timezone: TimeZone? = nil) {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -72,6 +75,7 @@ actor SessionUsageStore {
         var paths: [String] = []
         for case let url as URL in enumerator where url.pathExtension == "jsonl" { paths.append(url.path) }
         let live = Set(paths)
+        rejectedSources = rejectedSources.filter { live.contains($0.key) }
         var known = try db.files()
         // Existing sources are synchronized first, so an identical newly copied
         // source can be recognized from its persisted content fingerprint.
@@ -80,8 +84,14 @@ actor SessionUsageStore {
         var changed = 0
         for path in paths {
             let relative = String(path.dropFirst(projectsRoot.path.count + 1))
+            var attemptedSignature: SessionFileSignature?
             do {
                 let before = try SessionFileSignature.read(path)
+                attemptedSignature = before
+                if rejectedSources[path] == before {
+                    warnings.append(URL(fileURLWithPath: path).lastPathComponent)
+                    continue
+                }
                 var state = known[path]
                 if state == nil {
                     let matches = known.values.filter { $0.identity == before.identity && !live.contains($0.path) }
@@ -102,9 +112,8 @@ actor SessionUsageStore {
                     state = try db.file(at: path)
                     known[path] = state
                 }
-                if let state, state.parserVersion == Self.parserVersion, state.mtime == before.mtime, state.size == before.size, state.identity == before.identity {
+                if let state, state.status != "needs_review", state.parserVersion == Self.parserVersion, state.mtime == before.mtime, state.size == before.size, state.identity == before.identity {
                     if state.status == "missing" { try db.setStatus(id: state.id, status: "present") }
-                    if state.status == "needs_review" { warnings.append(URL(fileURLWithPath: path).lastPathComponent) }
                     continue
                 }
                 let timezone = state?.timezone.flatMap(TimeZone.init(identifier:)) ?? db.reportingTimezone
@@ -131,13 +140,22 @@ actor SessionUsageStore {
                 }
                 if try db.synchronize(relativePath: relative, parsed: parsed, signature: before, parserVersion: Self.parserVersion) {
                     changed += 1
+                    rejectedSources.removeValue(forKey: path)
                     known[path] = try db.file(at: path)
                 } else {
+                    rejectedSources[path] = before
                     log.warning("Source rewrite rejected; historical data retained: \(path)")
                     warnings.append(URL(fileURLWithPath: path).lastPathComponent)
                 }
-            } catch let error as DatabaseError { throw error }
-            catch {
+            } catch let error as DatabaseError {
+                // Invalid source data must not prevent other files from syncing.
+                guard error.resultCode == .SQLITE_CONSTRAINT else { throw error }
+                if let attemptedSignature, attemptedSignature == (try? SessionFileSignature.read(path)) {
+                    rejectedSources[path] = attemptedSignature
+                }
+                warnings.append(URL(fileURLWithPath: path).lastPathComponent)
+                log.warning("Source constraint rejected; historical data retained: \(path): \(error.localizedDescription)")
+            } catch {
                 warnings.append(URL(fileURLWithPath: path).lastPathComponent)
                 log.warning("Source not synchronized: \(path): \(error.localizedDescription)")
             }

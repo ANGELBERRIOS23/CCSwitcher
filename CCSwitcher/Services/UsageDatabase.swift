@@ -166,8 +166,9 @@ final class UsageDatabase: Sendable {
         }
     }
 
-    /// Legacy JSON contains no filesystem identity. A matching archived
-    /// contribution is grounds to stop, not proof that a new path is new usage.
+    /// Legacy imports and copies across filesystems may lack a matching identity.
+    /// A matching archived contribution warrants review; online sources may resume
+    /// into new files and must not block those files from being synchronized.
     func ambiguousSource(_ parsed: CachedFileV2) throws -> FileState? {
         let path: String? = try pool.read { db in
             let candidates = try Row.fetchAll(db, sql: "SELECT * FROM session_files WHERE provider='claude'")
@@ -175,6 +176,8 @@ final class UsageDatabase: Sendable {
                 guard (candidate["session_id"] as String?) == parsed.sessionId,
                       (candidate["is_sidechain"] as Bool) == parsed.isSidechain else { continue }
                 let id: Int64 = candidate["id"]
+                let oldPath = URL(fileURLWithPath: candidate["root_path"]).appendingPathComponent(candidate["relative_path"] as String).path
+                guard !FileManager.default.fileExists(atPath: oldPath) else { continue }
                 let old = try Row.fetchAll(db, sql: "SELECT * FROM usage_records WHERE file_id=? ORDER BY source_order", arguments: [id])
                 guard !old.isEmpty || !parsed.activityByDate.isEmpty else { continue }
                 let incomingHashes = Set(parsed.entries.compactMap(\.hash))
@@ -212,7 +215,7 @@ final class UsageDatabase: Sendable {
     /// Atomic relocation keeps anonymous costs and activity from being counted twice.
     func relocate(_ file: FileState, relativePath: String) throws {
         try pool.write { db in
-            try db.execute(sql: "UPDATE session_files SET root_path = ?, relative_path = ?, project_key = ?, is_sidechain = ?, source_status = 'present', updated_at_us = ? WHERE id = ?", arguments: [root.path, relativePath, relativePath.split(separator: "/").first.map(String.init) ?? "unknown", relativePath.contains("/subagents/"), Self.now(), file.id])
+            try db.execute(sql: "UPDATE session_files SET root_path = ?, relative_path = ?, project_key = ?, is_sidechain = ?, source_status = CASE WHEN source_status='needs_review' THEN source_status ELSE 'present' END, updated_at_us = ? WHERE id = ?", arguments: [root.path, relativePath, relativePath.split(separator: "/").first.map(String.init) ?? "unknown", relativePath.contains("/subagents/"), Self.now(), file.id])
         }
     }
 
@@ -236,10 +239,11 @@ final class UsageDatabase: Sendable {
     func synchronize(relativePath: String, parsed: CachedFileV2, signature: SessionFileSignature, parserVersion: Int) throws -> Bool {
         try pool.write { db in
             let prior = try Row.fetchOne(db, sql: "SELECT * FROM session_files WHERE provider = 'claude' AND root_path = ? AND relative_path = ?", arguments: [root.path, relativePath])
+            var anonymousMoves: [(id: Int64, key: String)] = []
             if let prior {
                 let id: Int64 = prior["id"]
-                let rows = try Row.fetchAll(db, sql: "SELECT * FROM usage_records WHERE file_id = ?", arguments: [id])
-                let existing = Dictionary(uniqueKeysWithValues: rows.map { (($0["record_key"] as String), $0) })
+                let rows = try Row.fetchAll(db, sql: "SELECT * FROM usage_records WHERE file_id = ? ORDER BY source_order", arguments: [id])
+                var existing = Dictionary(uniqueKeysWithValues: rows.map { (($0["record_key"] as String), $0) })
                 let incoming = Self.keyed(parsed.entries)
                 let oldSize: Int64? = prior["source_size_bytes"]
                 let oldExtras = try Self.object(prior["extensions_json"])
@@ -248,7 +252,43 @@ final class UsageDatabase: Sendable {
                 let oldZone: String? = prior["statistics_timezone"]
                 let oldSession: String? = prior["session_id"]
                 let oldDays = try Self.activityDays(prior["activity_by_date_json"])
-                let unsafe = (oldSize.map { signature.size < $0 } ?? false)
+                // V2 recovers rows that V1 accidentally split on Unicode separators.
+                // Verify existing bytes for SQLite sources. Legacy JSON has no
+                // digest/UTC times: match every known value and retain the other
+                // legacy safety checks below. Both require a unique alignment.
+                var ambiguousAnonymousUpgrade = false
+                let legacyUpgrade = (prior["parser_version"] as Int) == 0 && oldExtras["legacy_fields"] != nil
+                let verifiedUpgrade = (prior["parser_version"] as Int) == 1
+                    && oldHash != nil && oldHash == parsed.prefixHash && oldIdentity == signature.identity
+                if parserVersion == 2, legacyUpgrade || verifiedUpgrade {
+                    let anonymous = rows.filter { ($0["dedup_key"] as String?) == nil }
+                    let candidates = incoming.filter { $0.entry.hash == nil }
+                    if candidates.count > anonymous.count {
+                        let oldEntries = try anonymous.map(Self.entry)
+                        var first: [Int] = [], last: [Int] = []
+                        var cursor = 0
+                        for old in oldEntries {
+                            while cursor < candidates.count, !Self.sameAnonymousEntry(old, candidates[cursor].entry, allowUnknownTimestamp: legacyUpgrade) { cursor += 1 }
+                            guard cursor < candidates.count else { break }
+                            first.append(cursor); cursor += 1
+                        }
+                        cursor = candidates.count - 1
+                        for old in oldEntries.reversed() {
+                            while cursor >= 0, !Self.sameAnonymousEntry(old, candidates[cursor].entry, allowUnknownTimestamp: legacyUpgrade) { cursor -= 1 }
+                            guard cursor >= 0 else { break }
+                            last.append(cursor); cursor -= 1
+                        }
+                        if first.count == anonymous.count, first == Array(last.reversed()) {
+                            for row in anonymous { existing.removeValue(forKey: row["record_key"]) }
+                            for (row, index) in zip(anonymous, first) {
+                                let key = candidates[index].key
+                                existing[key] = row
+                                if key != (row["record_key"] as String) { anonymousMoves.append((row["id"], key)) }
+                            }
+                        } else { ambiguousAnonymousUpgrade = true }
+                    }
+                }
+                let unsafe = ambiguousAnonymousUpgrade || (oldSize.map { signature.size < $0 } ?? false)
                     || (oldIdentity.map { $0 != signature.identity } ?? false)
                     || (oldHash.map { $0 != parsed.prefixHash } ?? false)
                     || (oldSession != nil && parsed.sessionId != oldSession)
@@ -292,6 +332,14 @@ final class UsageDatabase: Sendable {
                     try db.execute(sql: "UPDATE session_files SET source_status = 'needs_review', updated_at_us = ? WHERE id = ? AND source_status != 'needs_review'", arguments: [Self.now(), id])
                     return false
                 }
+            }
+            // Temporary keys avoid UNIQUE collisions while shifting ordinals.
+            // This and the upserts below are one transaction; IDs and extension data survive.
+            for move in anonymousMoves {
+                try db.execute(sql: "UPDATE usage_records SET record_key=? WHERE id=?", arguments: ["upgrade-v2:\(move.id)",move.id])
+            }
+            for move in anonymousMoves {
+                try db.execute(sql: "UPDATE usage_records SET record_key=? WHERE id=?", arguments: [move.key,move.id])
             }
             let id = try Self.saveFile(db, root: root, relativePath: relativePath, parsed: parsed, signature: signature, parserVersion: parserVersion, timezone: reportingTimezone)
             let oldRows = try Row.fetchAll(db, sql: "SELECT record_key, extensions_json FROM usage_records WHERE file_id = ?", arguments: [id])
@@ -352,6 +400,14 @@ final class UsageDatabase: Sendable {
     func testingCheckpoint() throws { _ = try pool.writeWithoutTransaction { try $0.checkpoint(.truncate) } }
     func totalChanges() -> Int { pool.writeWithoutTransaction { $0.totalChangesCount } }
     func writerSynchronousMode() throws -> Int { try pool.writeWithoutTransaction { try Int.fetchOne($0, sql: "PRAGMA synchronous")! } }
+
+    private static func sameAnonymousEntry(_ a: CachedEntryV2, _ b: CachedEntryV2, allowUnknownTimestamp: Bool) -> Bool {
+        a.hash == nil && b.hash == nil
+            && ((allowUnknownTimestamp && a.timestampUnix == nil) || microseconds(a.timestampUnix) == microseconds(b.timestampUnix))
+            && a.date == b.date && a.hour == b.hour && a.model == b.model && a.speed == b.speed
+            && a.input == b.input && a.output == b.output && a.cw == b.cw && a.cw1h == b.cw1h && a.cr == b.cr
+            && a.costUSDRow == b.costUSDRow && a.tools == b.tools && a.linesWritten == b.linesWritten
+    }
 
     static func keyed(_ entries: [CachedEntryV2]) -> [(key: String, order: Int, entry: CachedEntryV2)] {
         var anonymous = 0

@@ -211,16 +211,15 @@ func walkJSONL(root: String) -> [String] {
 /// `sortFilesByTimestamp` ordering. Files without any parseable timestamp
 /// sort to the end.
 func earliestTimestamp(in path: String) -> Date? {
-    guard let data = FileManager.default.contents(atPath: path),
-          let content = String(data: data, encoding: .utf8) else { return nil }
+    guard let data = FileManager.default.contents(atPath: path) else { return nil }
     let f1 = ISO8601DateFormatter()
     f1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     let f2 = ISO8601DateFormatter()
     f2.formatOptions = [.withInternetDateTime]
     var earliest: Date?
-    content.enumerateLines { line, _ in
-        guard let lineData = line.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
+    // JSONL uses LF bytes; Unicode line separators can occur inside JSON strings.
+    data.split(separator: 0x0A).forEach { line in
+        guard let obj = try? JSONSerialization.jsonObject(with: Data(line)) as? [String: Any],
               let ts = obj["timestamp"] as? String,
               let d = f1.date(from: ts) ?? f2.date(from: ts) else { return }
         if earliest == nil || d < earliest! { earliest = d }
@@ -300,12 +299,11 @@ var rowsMissingPricing = 0
 var unknownModels: [String: Int] = [:]
 
 for path in allFiles {
-    guard let data = FileManager.default.contents(atPath: path),
-          let content = String(data: data, encoding: .utf8) else { continue }
-    content.enumerateLines { line, _ in
+    guard let data = FileManager.default.contents(atPath: path) else { continue }
+    // JSONL uses LF bytes; Unicode line separators can occur inside JSON strings.
+    data.split(separator: 0x0A).forEach { line in
         guard !line.isEmpty,
-              let lineData = line.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any]
+              let obj = try? JSONSerialization.jsonObject(with: Data(line)) as? [String: Any]
         else { return }
 
         // === ccusage strict schema mirror ===

@@ -50,8 +50,7 @@ struct ActivityDayContributionV2: Codable, Sendable {
 
 
 func parseSessionFile(at path: String, relativePath: String, mtime: Double, timezone: TimeZone, previousSize: Int64? = nil) -> CachedFileV2? {
-    guard let data = FileManager.default.contents(atPath: path),
-          let content = String(data: data, encoding: .utf8) else { return nil }
+    guard let data = FileManager.default.contents(atPath: path) else { return nil }
 
     let isoMain = ISO8601DateFormatter()
     isoMain.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -95,10 +94,10 @@ func parseSessionFile(at path: String, relativePath: String, mtime: Double, time
     let timestampPattern = #"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$"#
     let versionPattern   = #"^\d+\.\d+\.\d+"#
 
-    content.enumerateLines { line, _ in
+    // JSONL records end at LF bytes; Unicode separators inside strings are content.
+    data.split(separator: 0x0A).forEach { line in
         guard !line.isEmpty,
-              let lineData = line.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any]
+              let obj = try? JSONSerialization.jsonObject(with: Data(line)) as? [String: Any]
         else { return }
 
         guard let timestampStr = obj["timestamp"] as? String,
