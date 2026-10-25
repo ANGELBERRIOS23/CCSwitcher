@@ -154,6 +154,19 @@ final class StatusItemController: NSObject {
                 }
             }
             .store(in: &stripRefreshCancellables)
+
+        // @AppStorage settings the strip reads (e.g. "Show full email") used to
+        // be picked up by its 3-second poll; that tick is now once a minute.
+        // The notification is posted on whatever thread wrote the default, and
+        // this sink is main-actor code: Swift 6 traps if it runs anywhere else.
+        NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    self?.scheduleStripRefresh()
+                }
+            }
+            .store(in: &stripRefreshCancellables)
     }
 
     private func scheduleStripRefresh() {
