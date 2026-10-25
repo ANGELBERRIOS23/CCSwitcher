@@ -36,6 +36,9 @@
 "Checking..." = "Checking...";
 "Check for Updates" = "Check for Updates";
 "Easily switch between Claude Code accounts and monitor usage." = "Easily switch between Claude Code accounts and monitor usage.";
+"Send anonymous launch counts" = "Send anonymous launch counts";
+"Only launch counts and Aptabase's standard metadata are sent." = "Only launch counts and Aptabase's standard metadata are sent.";
+"Changes apply from the next launch." = "Changes apply from the next launch.";
 
 /* Usage Dashboard */
 "Loading usage data..." = "Loading usage data...";
@@ -193,3 +196,9 @@
 
 "Automatically check for updates" = "Automatically check for updates";
 "Automatically download updates" = "Automatically download updates";
+
+// Durable usage history
+"usage_storage_newer" = "Usage history requires a newer CCSwitcher. Update the app to continue.";
+"usage_storage_write_failed" = "Usage history could not be saved: %@. Existing history was preserved.";
+"usage_storage_scan_failed" = "Source files could not be synchronized. Saved history is still available. %@";
+"usage_storage_sources_paused" = "Usage history is preserved. Updates for %d source files are paused; see the app log for details.";

@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// Lists all configured accounts with switching and management.
 struct AccountSwitcherView: View {
@@ -7,6 +8,7 @@ struct AccountSwitcherView: View {
     @State private var showingAddConfirm = false
     @State private var editingAccountId: UUID?
     @State private var editingLabel = ""
+    @State private var copiedLoginURL = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -82,7 +84,7 @@ struct AccountSwitcherView: View {
     private var addAccountButtons: some View {
         if appState.isLoggingIn {
             // Logging in state
-            VStack(spacing: 8) {
+            VStack(spacing: 10) {
                 ProgressView()
                     .controlSize(.small)
                 Text("Waiting for browser login...")
@@ -91,6 +93,34 @@ struct AccountSwitcherView: View {
                     .font(.caption2)
                     .foregroundStyle(Theme.dim)
                     .multilineTextAlignment(.center)
+
+                HStack(spacing: 8) {
+                    if let authURL = appState.loginAuthURL {
+                        Button {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(authURL.absoluteString, forType: .string)
+                            copiedLoginURL = true
+                            Task {
+                                try? await Task.sleep(for: .seconds(2))
+                                copiedLoginURL = false
+                            }
+                        } label: {
+                            Label(
+                                copiedLoginURL ? "Copied!" : "Copy Login URL",
+                                systemImage: copiedLoginURL ? "checkmark" : "doc.on.doc"
+                            )
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .focusable(false)
+                    }
+
+                    Button("Cancel") {
+                        copiedLoginURL = false
+                        appState.cancelLogin()
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .focusable(false)
+                }
             }
             .frame(maxWidth: .infinity)
             .card(padding: 14)
@@ -128,17 +158,17 @@ struct AccountSwitcherView: View {
                     Label("Login New Account", systemImage: "person.badge.plus")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(PrimaryButtonStyle(height: 38))
+                .buttonStyle(PrimaryButtonStyle(height: 38, fillsWidth: true))
                 .focusable(false)
 
-                // Secondary: Capture already-logged-in account
+                // Capture already-logged-in account
                 Button {
                     showingAddConfirm = true
                 } label: {
                     Label("Add Current Account", systemImage: "plus.circle")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(SecondaryButtonStyle())
+                .buttonStyle(PrimaryButtonStyle(height: 38, fillsWidth: true))
                 .focusable(false)
             }
             .transition(.opacity)

@@ -36,6 +36,9 @@
 "Checking..." = "Comprobando...";
 "Check for Updates" = "Buscar actualizaciones";
 "Easily switch between Claude Code accounts and monitor usage." = "Cambia fácilmente entre cuentas de Claude Code y supervisa el uso.";
+"Send anonymous launch counts" = "Enviar recuentos de inicio anónimos";
+"Only launch counts and Aptabase's standard metadata are sent." = "Solo se envían los inicios de la app y los metadatos estándar de Aptabase.";
+"Changes apply from the next launch." = "Los cambios se aplican a partir del próximo inicio.";
 
 /* Usage Dashboard */
 "Loading usage data..." = "Cargando datos de uso...";
@@ -185,3 +188,9 @@
 
 "Automatically check for updates" = "Buscar actualizaciones automáticamente";
 "Automatically download updates" = "Descargar actualizaciones automáticamente";
+
+// Durable usage history
+"usage_storage_newer" = "El historial de uso requiere una versión más reciente de CCSwitcher. Actualiza la aplicación para continuar.";
+"usage_storage_write_failed" = "No se pudo guardar el historial de uso: %@. Se ha conservado el historial existente.";
+"usage_storage_scan_failed" = "No se pudieron sincronizar los archivos de origen. El historial guardado sigue disponible. %@";
+"usage_storage_sources_paused" = "Se ha conservado el historial. Las actualizaciones de %d archivos de origen están pausadas; consulta el registro de la aplicación.";

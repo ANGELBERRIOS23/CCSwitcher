@@ -36,6 +36,9 @@
 "Checking..." = "Vérification...";
 "Check for Updates" = "Vérifier les mises à jour";
 "Easily switch between Claude Code accounts and monitor usage." = "Basculez facilement entre les comptes Claude Code et surveillez l'utilisation.";
+"Send anonymous launch counts" = "Envoyer le nombre de lancements anonymement";
+"Only launch counts and Aptabase's standard metadata are sent." = "Seuls les lancements et les métadonnées standard d’Aptabase sont envoyés.";
+"Changes apply from the next launch." = "Les modifications prennent effet au prochain lancement.";
 
 /* Usage Dashboard */
 "Loading usage data..." = "Chargement des données d'utilisation...";
@@ -188,3 +191,9 @@
 
 "Automatically check for updates" = "Rechercher automatiquement les mises à jour";
 "Automatically download updates" = "Télécharger automatiquement les mises à jour";
+
+// Durable usage history
+"usage_storage_newer" = "Une version plus récente de CCSwitcher est nécessaire pour cet historique. Veuillez mettre l’application à jour.";
+"usage_storage_write_failed" = "Impossible d’enregistrer l’historique : %@. L’historique existant a été conservé.";
+"usage_storage_scan_failed" = "Impossible de synchroniser les fichiers sources. L’historique enregistré reste disponible. %@";
+"usage_storage_sources_paused" = "L’historique est conservé. La mise à jour de %d fichiers sources est suspendue ; consultez le journal de l’application.";

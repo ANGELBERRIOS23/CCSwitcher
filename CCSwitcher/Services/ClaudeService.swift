@@ -20,6 +20,8 @@ final class ClaudeService: @unchecked Sendable {
     private var _claudePath: String
     /// Monotonic counter to detect out-of-order setPath completions.
     private var _setPathGeneration: UInt64 = 0
+    private var _activeLoginProcess: Process?
+    private var _loginCancelled = false
 
     /// Currently active path. Thread-safe.
     var claudePath: String {
@@ -551,14 +553,61 @@ final class ClaudeService: @unchecked Sendable {
     }
 
     /// Run `claude auth login` which opens browser for OAuth.
-    func login() async throws {
+    /// Streams output to extract the authorization URL as soon as the CLI prints it,
+    /// so the user can copy it into another browser if needed (#33).
+    func login(onAuthURL: (@Sendable (URL) -> Void)? = nil) async throws {
         log.info("[login] Starting `claude auth login`... (will open browser)")
-        _ = try await runClaude(args: ["auth", "login"])
+        _ = try await runClaudeLogin(onAuthURL: onAuthURL)
         log.info("[login] `claude auth login` process exited")
 
         // Give keychain a moment to sync after CLI writes
         try await Task.sleep(for: .seconds(1))
+        // A Cancel during the delay must still stop the caller from capturing.
+        if lock.withLock({ _loginCancelled }) {
+            log.info("[login] Cancelled during the post-login delay")
+            throw CancellationError()
+        }
         log.info("[login] Post-login delay complete, ready for token capture")
+    }
+
+    /// Start a new login attempt. Called synchronously when the UI enters the
+    /// logging-in state, so a Cancel pressed before the subprocess launches
+    /// is not cleared by the attempt it was meant to stop.
+    func beginLogin() {
+        lock.lock()
+        _loginCancelled = false
+        lock.unlock()
+    }
+
+    /// Cancel an in-progress `claude auth login` subprocess.
+    func cancelLogin() {
+        lock.lock()
+        _loginCancelled = true
+        let process = _activeLoginProcess
+        lock.unlock()
+        if let process, process.isRunning {
+            log.info("[login] Terminating active `claude auth login` process")
+            process.terminate()
+        }
+    }
+
+    /// Extract the OAuth authorization URL from `claude auth login` output.
+    static func extractAuthURL(from text: String) -> URL? {
+        let pattern = #"https://[^\s"<>]+"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let nsRange = NSRange(text.startIndex..<text.endIndex, in: text)
+        for match in regex.matches(in: text, range: nsRange) {
+            guard let range = Range(match.range, in: text) else { continue }
+            let raw = String(text[range]).trimmingCharacters(in: CharacterSet(charactersIn: ".,;)"))
+            guard let url = URL(string: raw),
+                  let host = url.host?.lowercased(),
+                  (host.contains("claude.ai") || host.contains("anthropic.com")),
+                  url.path.contains("oauth") else {
+                continue
+            }
+            return url
+        }
+        return nil
     }
 
     /// Run `claude auth logout`
@@ -682,6 +731,161 @@ final class ClaudeService: @unchecked Sendable {
     }
 
     // MARK: - CLI Runner
+
+    private func runClaudeLogin(onAuthURL: (@Sendable (URL) -> Void)?) async throws -> String {
+        let claudePath = self.claudePath
+        log.debug("[runClaudeLogin] Running: \(claudePath) auth login")
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async { [weak self, claudePath] in
+                let process = Process()
+                let pipe = Pipe()
+
+                process.executableURL = URL(fileURLWithPath: claudePath)
+                process.arguments = ["auth", "login"]
+                process.standardOutput = pipe
+                process.standardError = pipe
+
+                // Intercept `process.env.BROWSER` so we capture the automatic
+                // `redirect_uri=http://localhost:<port>/callback` URL instead of
+                // the manual-code URL printed to stdout, then forward to `/usr/bin/open`.
+                let tempDir = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("ccswitcher-login-\(UUID().uuidString)", isDirectory: true)
+                let urlFile = tempDir.appendingPathComponent("auth-url.txt")
+                let browserScript = tempDir.appendingPathComponent("browser.sh")
+                var interceptInstalled = false
+                do {
+                    try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+                    let script = "#!/bin/sh\nprintf '%s' \"$1\" > \"$CCSWITCHER_AUTH_URL_FILE\"\n/usr/bin/open \"$1\"\n"
+                    try script.write(to: browserScript, atomically: true, encoding: .utf8)
+                    try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: browserScript.path)
+                    interceptInstalled = true
+                } catch {
+                    log.warning("[runClaudeLogin] Could not create BROWSER interceptor: \(error.localizedDescription)")
+                }
+                defer {
+                    try? FileManager.default.removeItem(at: tempDir)
+                }
+
+                var env = ProcessInfo.processInfo.environment
+                let homeDir = NSHomeDirectory()
+                var extraPaths = [
+                    "/opt/homebrew/bin",
+                    "/usr/local/bin",
+                    "\(homeDir)/.local/bin",
+                    "\(homeDir)/.npm-global/bin"
+                ]
+                if claudePath.contains("/") {
+                    let resolved = URL(fileURLWithPath: claudePath).resolvingSymlinksInPath().path
+                    let resolvedBinDir = URL(fileURLWithPath: resolved).deletingLastPathComponent().path
+                    extraPaths.insert(resolvedBinDir, at: 0)
+                }
+                let existingPath = env["PATH"] ?? "/usr/bin:/bin"
+                env["PATH"] = (extraPaths + [existingPath]).joined(separator: ":")
+                env["HOME"] = homeDir
+                if interceptInstalled {
+                    env["BROWSER"] = browserScript.path
+                    env["CCSWITCHER_AUTH_URL_FILE"] = urlFile.path
+                }
+                process.environment = env
+
+                // A Cancel that arrived before the process existed must win;
+                // the flag is cleared only by beginLogin(), never here.
+                self?.lock.lock()
+                let cancelledEarly = self?._loginCancelled ?? false
+                if !cancelledEarly { self?._activeLoginProcess = process }
+                self?.lock.unlock()
+                if cancelledEarly {
+                    log.info("[runClaudeLogin] Cancelled before `claude auth login` started")
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+
+                final class OnceBox: @unchecked Sendable {
+                    private let lock = NSLock()
+                    private var fired = false
+                    func tryFire() -> Bool {
+                        lock.lock()
+                        defer { lock.unlock() }
+                        guard !fired else { return false }
+                        fired = true
+                        return true
+                    }
+                }
+                let onceBox = OnceBox()
+                let emitOnce: @Sendable (URL) -> Void = { url in
+                    if onceBox.tryFire() {
+                        log.info("[runClaudeLogin] Captured OAuth URL for browser login")
+                        onAuthURL?(url)
+                    }
+                }
+
+                // Poll `urlFile` on a lightweight timer because `claude auth login`
+                // writes to stdout *before* invoking `$BROWSER`, and then blocks
+                // waiting for the HTTP callback without further stdout writes.
+                let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .userInitiated))
+                timer.schedule(deadline: .now() + .milliseconds(40), repeating: .milliseconds(50))
+                timer.setEventHandler {
+                    if let raw = try? String(contentsOf: urlFile, encoding: .utf8)
+                        .trimmingCharacters(in: .whitespacesAndNewlines),
+                       !raw.isEmpty,
+                       let url = URL(string: raw) {
+                        emitOnce(url)
+                        timer.cancel()
+                    }
+                }
+                timer.resume()
+
+                defer {
+                    timer.cancel()
+                    self?.lock.lock()
+                    if self?._activeLoginProcess === process {
+                        self?._activeLoginProcess = nil
+                    }
+                    self?.lock.unlock()
+                }
+
+                do {
+                    try process.run()
+                    let handle = pipe.fileHandleForReading
+                    var accumulated = Data()
+
+                    while true {
+                        let chunk = handle.availableData
+                        if chunk.isEmpty { break }
+                        accumulated.append(chunk)
+                        if !interceptInstalled,
+                           let text = String(data: accumulated, encoding: .utf8),
+                           let url = Self.extractAuthURL(from: text) {
+                            emitOnce(url)
+                        }
+                    }
+                    process.waitUntilExit()
+
+                    let wasCancelled: Bool = {
+                        guard let self else { return false }
+                        self.lock.lock()
+                        defer { self.lock.unlock() }
+                        return self._loginCancelled
+                    }()
+
+                    if wasCancelled {
+                        continuation.resume(throwing: CancellationError())
+                        return
+                    }
+
+                    let output = String(data: accumulated, encoding: .utf8) ?? ""
+                    if process.terminationStatus == 0 {
+                        continuation.resume(returning: output)
+                    } else {
+                        continuation.resume(throwing: ClaudeServiceError.cliError("exit \(process.terminationStatus)"))
+                    }
+                } catch {
+                    log.error("[runClaudeLogin] Process launch failed: \(error.localizedDescription)")
+                    continuation.resume(throwing: ClaudeServiceError.processLaunchFailed(error))
+                }
+            }
+        }
+    }
 
     private func runClaude(args: [String]) async throws -> String {
         let claudePath = self.claudePath

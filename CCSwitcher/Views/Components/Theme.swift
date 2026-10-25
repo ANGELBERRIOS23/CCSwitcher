@@ -281,14 +281,16 @@ struct CircleIconButton: View {
 /// Primary call-to-action: terracotta gradient pill with a soft glow.
 struct PrimaryButtonStyle: ButtonStyle {
     var height: CGFloat = 36
+    var fillsWidth = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(.subheadline, design: .rounded).weight(.semibold))
             .foregroundStyle(.white)
             .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
+            .fixedSize(horizontal: !fillsWidth, vertical: false)
             .padding(.horizontal, 14)
+            .frame(maxWidth: fillsWidth ? .infinity : nil)
             .frame(minHeight: height)
             .background(
                 RoundedRectangle(cornerRadius: height / 2.6, style: .continuous)

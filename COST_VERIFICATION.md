@@ -9,8 +9,8 @@ This document describes how to verify alignment and what to do if it fails.
 
 ## The contract
 
-For any window of recent days, the totals reported by our parser
-(`CCSwitcher/Services/SessionParseCacheV2.swift` → `costSummary()`) must
+For an identical source snapshot and pricing table, the totals reported by our parser
+(`CCSwitcher/Services/SessionUsageStore.swift` → `costSummary()`) must
 match `npx ccusage@latest daily --since YYYYMMDD --json` exactly, on:
 
 - `inputTokens`, `outputTokens`, `cacheCreationTokens`, `cacheReadTokens`
@@ -73,7 +73,7 @@ Fix order when ccusage changes:
 
 1. **Update `Tools/recalc_cost.swift` first** to mirror the new
    algorithm. Iterate until `verify_cost.sh` passes again.
-2. **Then port the change into `CCSwitcher/Services/SessionParseCacheV2.swift`.**
+2. **Then port the change into `CCSwitcher/Services/SessionUsageStore.swift`.**
 3. Re-run `verify_cost.sh` and run the app to confirm the UI shows
    matching numbers.
 4. Then release.
@@ -88,7 +88,7 @@ ccusage in isolation.
 |---|---|
 | `Tools/verify_cost.sh` | One-shot verification — what you run before releasing. |
 | `Tools/recalc_cost.swift` | Standalone reparser that mirrors ccusage's algorithm. Single source of truth for "what's the right answer." |
-| `CCSwitcher/Services/SessionParseCacheV2.swift` | The in-app version that the UI consumes. Must match the recalc script's outputs. |
+| `CCSwitcher/Services/SessionUsageStore.swift` | The in-app version that the UI consumes. Must match the recalc script's outputs. |
 | `CCSwitcher/Models/CostData.swift` → `ModelPricing` | App's pricing table. Should track LiteLLM. |
 | `/tmp/litellm-pricing.json` | Cached LiteLLM pricing snapshot (auto-refreshed by `recalc_cost.swift` once per hour). |
 | `/tmp/ccswitcher-verify-cost/` | Raw JSON outputs from the last verification run — keep around for debugging. |
@@ -149,3 +149,9 @@ will rediscover all of these the hard way if they aren't written down.
     what users compare us to.
 
 [ccusage]: https://github.com/ryoppippi/ccusage
+
+## SQLite history validation
+
+The standalone reparser check does not exercise the database. Also run the unhosted `CCSwitcherTests` target (`xcodebuild test -project CCSwitcher.xcodeproj -scheme CCSwitcher -destination 'platform=macOS'`). It tests the actual SQLite winner query and fixed-price cost aggregation, anonymous rows, stream deduplication across dates, 200k tiers, fast mode, one-hour cache writes, sidechain activity, legacy import, retained sources, and bounded writes in a 100 MB history.
+
+The durable database retains history after source transcripts disappear. Its totals can therefore exceed ccusage's current-files totals. Compare the same source snapshot when checking algorithm parity; missing archived sources are not grounds to delete stored records. A one-time import retains unknown UTC timestamps and timezone metadata as unknown.

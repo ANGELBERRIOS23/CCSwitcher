@@ -89,9 +89,9 @@ Das vom Benutzer sichtbare Ergebnis ist dasselbe, das CodexBar-Benutzer sehen: n
 
 Kostenübersichten und Heutige-Aktivität-Statistiken werden aus Claude Codes pro-Sitzung-JSONL-Dateien unter `~/.claude/projects/` berechnet. Das Verzeichnis eines Power-Users kann hunderte Megabyte über tausende Dateien umfassen. Ursprünglich verbrauchte das alle 5 Minuten erfolgende Reparsen des gesamten Baums im Leerlauf die CPU vollständig ([#13](https://github.com/XueshiQiao/CCSwitcher/issues/13)).
 
-- CCSwitcher pflegt einen persistenten pro-Datei-Parse-Cache unter `~/Library/Application Support/CCSwitcher/session-parse-cache.json`, mit der Datei-mtime als Schlüssel.
-- Bei jedem Refresh werden Dateien mit unveränderter mtime komplett übersprungen — der Cache enthält ihre zuvor geparsten Aggregate, und das Ergebnis wird im Speicher summiert.
-- Nur die aktiv modifizierten Dateien (typischerweise nur Ihre aktuelle Claude Code Sitzung) werden neu geparst. Steady-State-Refreshes fallen von ~5 Sekunden CPU-Sättigung auf unter 100 ms.
+- CCSwitcher speichert Nutzungsdaten und dateibezogene Aktivitätsstatistiken mit GRDB und SQLite unter `~/Library/Application Support/CCSwitcher/usage.sqlite`.
+- Unveränderte Dateien werden übersprungen. Änderungen werden in einer Transaktion gezielt gespeichert, ohne den gesamten Verlauf als JSON neu zu schreiben.
+- Bestehende JSON-Daten werden einmalig importiert. Das Löschen eines Claude-Protokolls löscht keine bereits gespeicherten Verlaufsdaten.
 
 ### 5. Security-CLI Keychain-Reader
 

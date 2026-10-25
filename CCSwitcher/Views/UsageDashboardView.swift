@@ -281,16 +281,30 @@ struct UsageDashboardView: View {
 
     @ViewBuilder
     private func accountHeader(_ account: Account) -> some View {
+        let name = account.effectiveDisplayName(obfuscated: !showFullEmail)
+        let email = account.displayEmail(obfuscated: !showFullEmail)
+
         HStack(spacing: 8) {
-            Avatar(name: account.effectiveDisplayName(obfuscated: !showFullEmail),
+            Avatar(name: name,
                    icon: account.provider.iconName, active: account.isActive, size: 24)
 
-            Text(account.displayEmail(obfuscated: !showFullEmail))
-                .font(.subheadline.weight(.medium))
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(name)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
 
-            if account.isActive {
-                Badge(text: String(localized: "Active", bundle: L10n.bundle), color: Theme.success)
+                    if account.isActive {
+                        Badge(text: String(localized: "Active", bundle: L10n.bundle), color: Theme.success)
+                    }
+                }
+
+                if name != email {
+                    Text(email)
+                        .font(.caption2)
+                        .foregroundStyle(Theme.dim)
+                        .lineLimit(1)
+                }
             }
 
             Spacer()
