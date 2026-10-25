@@ -241,7 +241,7 @@ private struct AccountRow: View {
                     Text(account.provider.rawValue)
                 }
                 .font(.caption2)
-                .foregroundStyle(Theme.faint)
+                .foregroundStyle(Theme.dim)
             }
 
             Spacer(minLength: 4)

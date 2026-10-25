@@ -205,7 +205,7 @@ struct UsageDashboardView: View {
             VStack(spacing: 3) {
                 Text("\(count)")
                     .font(.system(size: 14, weight: .semibold, design: panelStyle.numberDesign).monospacedDigit())
-                    .foregroundStyle(count > 0 ? Theme.text : Theme.faint)
+                    .foregroundStyle(count > 0 ? Theme.text : Theme.dim)
                     .contentTransition(.numericText(value: Double(count)))
                     .animation(Theme.spring, value: count)
                 HStack(spacing: 4) {
@@ -215,7 +215,7 @@ struct UsageDashboardView: View {
                         .opacity(count > 0 ? 1 : 0.4)
                     Text(name)
                         .font(.caption2)
-                        .foregroundStyle(count > 0 ? Theme.dim : Theme.faint)
+                        .foregroundStyle(Theme.dim)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -380,7 +380,7 @@ struct UsageDashboardView: View {
                 Spacer()
                 Text(LocalizedStringKey(enabled ? "On" : "Off"))
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(enabled ? Theme.warning : Theme.faint)
+                    .foregroundStyle(enabled ? Theme.warning : Theme.dim)
             }
         }
     }

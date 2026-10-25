@@ -20,7 +20,10 @@ enum Theme {
 
     static let text = Color.adaptive(light: Color(hexRGB: "#141413")!, dark: Color(hexRGB: "#FAF9F5")!)
     static let dim = Color.adaptive(light: Color(hexRGB: "#73726C")!, dark: Color(hexRGB: "#A6A39A")!)
-    static let faint = Color.adaptive(light: Color(hexRGB: "#B0AEA5")!, dark: Color(hexRGB: "#5E5D59")!)
+    /// For icons and status marks, not text: at least 3:1 against the panel
+    /// and cards (WCAG non-text contrast). A tone that reaches 4.5:1 for small
+    /// text is indistinguishable from `dim`, so quiet text uses `dim` instead.
+    static let faint = Color.adaptive(light: Color(hexRGB: "#8A8880")!, dark: Color(hexRGB: "#8A8984")!)
     static let hairline = Color.adaptive(light: Color.black.opacity(0.07), dark: Color.white.opacity(0.08))
     static let highlight = Color.adaptive(light: Color.white.opacity(0.9), dark: Color.white.opacity(0.10))
     static let shadow = Color.adaptive(light: Color(hexRGB: "#5C4A3D")!.opacity(0.10), dark: Color.black.opacity(0.35))
