@@ -1388,7 +1388,10 @@ final class AppState: ObservableObject {
     }
 
     private func saveAccounts(refreshWidget: Bool = false) {
-        if let data = try? JSONEncoder().encode(accounts) {
+        // Called on every refresh (updateActiveAccount), usually with nothing
+        // changed; skip the write, which UserDefaults would sync to disk.
+        if let data = try? JSONEncoder().encode(accounts),
+           data != UserDefaults.standard.data(forKey: accountsKey) {
             UserDefaults.standard.set(data, forKey: accountsKey)
             log.debug("[saveAccounts] Saved \(self.accounts.count) accounts to UserDefaults")
         }
