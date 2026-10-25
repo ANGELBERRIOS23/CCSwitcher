@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import Combine
 import WidgetKit
 
@@ -23,6 +24,7 @@ final class AppState: ObservableObject {
     @Published var activeSessions: [SessionInfo] = []
     @Published var isLoading = false
     @Published var isLoggingIn = false
+    @Published var loginAuthURL: URL?
     @Published var errorMessage: String?
     @Published var claudeAvailable = false
     @Published var lastUsageRefresh: Date?
@@ -230,8 +232,12 @@ final class AppState: ObservableObject {
     /// usage on another's card and overwrote its stored token.
     private func liveCredentialOwner() -> LiveCredentialOwner {
         let accessToken = keychain.readClaudeToken().flatMap(ClaudeService.extractAccessToken(from:))
-        let claimedEmail = keychain.readOAuthAccount()?["emailAddress"]?.value as? String
-        let claimedId = claimedEmail.flatMap { email in accounts.first(where: { $0.email == email })?.id }
+        let claimedOAuth = keychain.readOAuthAccount()
+        let claimedEmail = claimedOAuth?["emailAddress"]?.value as? String
+        let claimedOrgId = claimedOAuth?["organizationUuid"]?.value as? String
+        let claimedId = claimedEmail.flatMap { email in
+            matchAccountIndex(email: email, orgId: claimedOrgId).map { accounts[$0].id }
+        }
         return credentialAnchor.resolveOwner(
             accessToken: accessToken,
             claimedAccountId: claimedId,
@@ -278,6 +284,24 @@ final class AppState: ObservableObject {
 
     // MARK: - Account Management
 
+    /// Locate an account by (email, orgId). The same email can belong to
+    /// multiple Teams/organizations, so matching by email alone would let a
+    /// second organization silently take over the first one's entry.
+    /// Accounts saved by older versions have no orgId (nil): fall back to
+    /// email-only matching for those; callers backfill orgId after matching.
+    private func matchAccountIndex(email: String, orgId: String?) -> Int? {
+        if let exact = accounts.firstIndex(where: { $0.email == email && $0.orgId == orgId }) {
+            return exact
+        }
+        return accounts.firstIndex(where: { $0.email == email && $0.orgId == nil })
+    }
+
+    func cancelLogin() {
+        claudeService.cancelLogin()
+        loginAuthURL = nil
+        isLoggingIn = false
+    }
+
     func addAccount() async {
         log.info("[addAccount] Starting add current account flow...")
         guard claudeAvailable else {
@@ -300,9 +324,11 @@ final class AppState: ObservableObject {
             }
             log.info("[addAccount] Current auth: logged in, sub=\(status.subscriptionType ?? "nil")")
 
-            if accounts.contains(where: { $0.email == email }) {
+            if let existing = matchAccountIndex(email: email, orgId: status.orgId) {
+                accounts[existing].orgId = status.orgId
+                saveAccounts()
                 errorMessage = String(localized: "Account already exists", bundle: L10n.bundle)
-                log.warning("[addAccount] Aborted: duplicate account")
+                log.warning("[addAccount] Aborted: duplicate account (same email + org)")
                 return
             }
 
@@ -310,7 +336,8 @@ final class AppState: ObservableObject {
             // live token does not belong to. Adding on that word would file
             // another account's credential under a brand-new entry.
             if let ownerId = liveCredentialOwner().credentialAccountId,
-               let owner = accounts.first(where: { $0.id == ownerId }), owner.email != email {
+               let owner = accounts.first(where: { $0.id == ownerId }),
+               (owner.email != email || (owner.orgId != nil && status.orgId != nil && owner.orgId != status.orgId)) {
                 errorMessage = String(localized: "Claude reports \(email), but the stored sign-in still belongs to \(owner.email). Switch accounts once, then add.", bundle: L10n.bundle)
                 log.error("[addAccount] Aborted: live credential belongs to \(owner.email), not \(email)")
                 return
@@ -321,6 +348,7 @@ final class AppState: ObservableObject {
                 displayName: status.orgName ?? email,
                 provider: .claudeCode,
                 orgName: status.orgName,
+                orgId: status.orgId,
                 subscriptionType: status.subscriptionType,
                 isActive: accounts.isEmpty
             )
@@ -368,7 +396,9 @@ final class AppState: ObservableObject {
         }
 
         isLoggingIn = true
+        loginAuthURL = nil
         errorMessage = nil
+        defer { loginAuthURL = nil }
 
         do {
             // 1. Back up current account (token + oauthAccount) before login overwrites them
@@ -382,7 +412,11 @@ final class AppState: ObservableObject {
 
             // 2. Run `claude auth login` — this overwrites both keychain and ~/.claude.json
             log.info("[loginNewAccount] Step 2: Running `claude auth login`...")
-            try await claudeService.login()
+            try await claudeService.login { [weak self] url in
+                Task { @MainActor in
+                    self?.loginAuthURL = url
+                }
+            }
             log.info("[loginNewAccount] Step 2: Login process completed")
 
             // 3. Read the new identity from ~/.claude.json
@@ -409,8 +443,8 @@ final class AppState: ObservableObject {
             // using. The capture CAN also fail (e.g. the backup store refuses
             // writes while unreadable); claiming "credentials refreshed" then
             // would leave a stale backup behind an explicit success message.
-            if let existing = accounts.firstIndex(where: { $0.email == email }) {
-                log.info("[loginNewAccount] Step 4: Account already exists, refreshing backup and marking it active")
+            if let existing = matchAccountIndex(email: email, orgId: status.orgId) {
+                log.info("[loginNewAccount] Step 4: Account already exists (email + org), refreshing backup and marking it active")
                 // A just-completed login is itself the proof of ownership — the
                 // CLI minted this credential for this account — so capture and
                 // re-anchor directly instead of asking the (now superseded) anchor.
@@ -419,6 +453,8 @@ final class AppState: ObservableObject {
                 for i in accounts.indices {
                     accounts[i].isActive = (i == existing)
                 }
+                accounts[existing].orgId = status.orgId
+                accounts[existing].orgName = status.orgName
                 accounts[existing].lastUsed = Date()
                 activeAccount = accounts[existing]
                 // A login is a deliberate account choice; grant it the same
@@ -441,6 +477,7 @@ final class AppState: ObservableObject {
                 displayName: status.orgName ?? email,
                 provider: .claudeCode,
                 orgName: status.orgName,
+                orgId: status.orgId,
                 subscriptionType: status.subscriptionType,
                 isActive: true
             )
@@ -470,6 +507,9 @@ final class AppState: ObservableObject {
             isLoggingIn = false
             await refresh()
             log.info("[loginNewAccount] ===== Login completed =====")
+        } catch is CancellationError {
+            isLoggingIn = false
+            log.info("[loginNewAccount] Login cancelled by user")
         } catch {
             errorMessage = error.localizedDescription
             isLoggingIn = false
@@ -771,7 +811,9 @@ final class AppState: ObservableObject {
         }
 
         isLoggingIn = true
+        loginAuthURL = nil
         errorMessage = nil
+        defer { loginAuthURL = nil }
 
         do {
             // 1. Back up current active account before login overwrites it
@@ -782,7 +824,11 @@ final class AppState: ObservableObject {
 
             // 2. Run login
             log.info("[reauth] Running `claude auth login`...")
-            try await claudeService.login()
+            try await claudeService.login { [weak self] url in
+                Task { @MainActor in
+                    self?.loginAuthURL = url
+                }
+            }
 
             // 3. Verify the login result matches the target account
             let status = try await claudeService.getAuthStatus()
@@ -805,6 +851,16 @@ final class AppState: ObservableObject {
                 return
             }
 
+            // The same email can belong to multiple organizations: make sure the
+            // login landed on THIS entry's organization, so another Team's
+            // credentials don't get stored under it.
+            if let expectedOrg = account.orgId, let gotOrg = status.orgId, expectedOrg != gotOrg {
+                errorMessage = String(localized: "Logged in to organization \(status.orgName ?? gotOrg), but expected \(account.orgName ?? expectedOrg). Credentials not updated.", bundle: L10n.bundle)
+                log.error("[reauth] Org mismatch: got \(gotOrg), expected \(expectedOrg)")
+                isLoggingIn = false
+                return
+            }
+
             // 4. Capture the fresh token. The login just proved this credential
             // is this account's, so it also re-anchors — this is the way out of
             // a desync the user is told to take.
@@ -819,6 +875,7 @@ final class AppState: ObservableObject {
             // fail while the UI claimed everything was refreshed.
             if let index = accounts.firstIndex(where: { $0.id == account.id }) {
                 accounts[index].orgName = status.orgName
+                accounts[index].orgId = status.orgId
                 accounts[index].subscriptionType = status.subscriptionType
 
                 // Mark this account as active (it's what the CLI is now using)
@@ -841,6 +898,9 @@ final class AppState: ObservableObject {
                 errorMessage = String(localized: "Could not capture credentials", bundle: L10n.bundle)
                 log.error("[reauth] ===== Re-authentication finished, but the backup capture FAILED =====")
             }
+        } catch is CancellationError {
+            isLoggingIn = false
+            log.info("[reauth] Re-authentication cancelled by user")
         } catch {
             errorMessage = error.localizedDescription
             isLoggingIn = false
@@ -1259,11 +1319,12 @@ final class AppState: ObservableObject {
             return
         }
 
-        if let index = accounts.firstIndex(where: { $0.email == email }) {
+        if let index = matchAccountIndex(email: email, orgId: status.orgId) {
             for i in accounts.indices {
                 accounts[i].isActive = (i == index)
             }
             accounts[index].orgName = status.orgName
+            accounts[index].orgId = status.orgId
             accounts[index].subscriptionType = status.subscriptionType
             activeAccount = accounts[index]
             saveAccounts()
@@ -1274,6 +1335,7 @@ final class AppState: ObservableObject {
                 displayName: status.orgName ?? email,
                 provider: .claudeCode,
                 orgName: status.orgName,
+                orgId: status.orgId,
                 subscriptionType: status.subscriptionType,
                 isActive: true
             )
