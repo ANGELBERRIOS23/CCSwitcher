@@ -190,3 +190,6 @@
 "Updated %@ ago" = "Updated %@ ago";
 "Could not save the refreshed sign-in; will retry automatically." = "Could not save the refreshed sign-in; will retry automatically.";
 "Credential storage is temporarily unavailable. Try again shortly." = "Credential storage is temporarily unavailable. Try again shortly.";
+
+"Automatically check for updates" = "Automatically check for updates";
+"Automatically download updates" = "Automatically download updates";

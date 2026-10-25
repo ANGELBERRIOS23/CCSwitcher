@@ -185,3 +185,6 @@
 "Updated %@ ago" = "Aktualisiert vor %@";
 "Could not save the refreshed sign-in; will retry automatically." = "Aktualisierte Anmeldedaten konnten nicht gespeichert werden; es wird automatisch erneut versucht.";
 "Credential storage is temporarily unavailable. Try again shortly." = "Anmeldedaten-Speicher ist vorübergehend nicht verfügbar. Versuchen Sie es gleich erneut.";
+
+"Automatically check for updates" = "Automatisch nach Updates suchen";
+"Automatically download updates" = "Updates automatisch herunterladen";

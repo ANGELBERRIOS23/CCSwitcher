@@ -185,3 +185,6 @@
 "Updated %@ ago" = "%@前に更新";
 "Could not save the refreshed sign-in; will retry automatically." = "更新されたログイン情報を保存できませんでした。自動的に再試行します。";
 "Credential storage is temporarily unavailable. Try again shortly." = "認証情報ストレージは一時的に利用できません。しばらくしてからもう一度お試しください。";
+
+"Automatically check for updates" = "アップデートを自動的に確認";
+"Automatically download updates" = "アップデートを自動的にダウンロード";

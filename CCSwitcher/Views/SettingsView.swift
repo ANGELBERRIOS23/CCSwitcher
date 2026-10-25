@@ -103,6 +103,9 @@ struct SettingsView: View {
                     .onChange(of: launchAtLogin) { _, newValue in
                         toggleLaunchAtLogin(newValue)
                     }
+                Toggle("Automatically check for updates", isOn: $updateChecker.automaticallyChecksForUpdates)
+                Toggle("Automatically download updates", isOn: $updateChecker.automaticallyDownloadsUpdates)
+                    .disabled(!updateChecker.automaticallyChecksForUpdates)
             }
         }
         .formStyle(.grouped)

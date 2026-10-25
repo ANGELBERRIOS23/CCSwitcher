@@ -185,3 +185,6 @@
 "Updated %@ ago" = "Mis à jour il y a %@";
 "Could not save the refreshed sign-in; will retry automatically." = "Impossible d'enregistrer les identifiants actualisés ; nouvelle tentative automatique.";
 "Credential storage is temporarily unavailable. Try again shortly." = "Le stockage des identifiants est temporairement indisponible. Réessayez dans un instant.";
+
+"Automatically check for updates" = "Rechercher automatiquement les mises à jour";
+"Automatically download updates" = "Télécharger automatiquement les mises à jour";

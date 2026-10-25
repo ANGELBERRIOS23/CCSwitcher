@@ -185,3 +185,6 @@
 "Updated %@ ago" = "%@前更新";
 "Could not save the refreshed sign-in; will retry automatically." = "无法保存刷新后的登录凭据；将自动重试。";
 "Credential storage is temporarily unavailable. Try again shortly." = "凭据存储暂时不可用。请稍后重试。";
+
+"Automatically check for updates" = "自动检查更新";
+"Automatically download updates" = "自动下载更新";

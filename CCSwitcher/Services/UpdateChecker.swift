@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import AppKit
 import Sparkle
@@ -15,17 +16,54 @@ final class UpdateChecker: ObservableObject {
     /// Source-compat shim. Sparkle's UI is responsible for visible progress.
     @Published var isChecking = false
 
+    @Published var automaticallyChecksForUpdates: Bool = false {
+        didSet {
+            guard controller.updater.automaticallyChecksForUpdates != automaticallyChecksForUpdates else { return }
+            controller.updater.automaticallyChecksForUpdates = automaticallyChecksForUpdates
+            if !automaticallyChecksForUpdates {
+                automaticallyDownloadsUpdates = false
+            }
+        }
+    }
+
+    @Published var automaticallyDownloadsUpdates: Bool = false {
+        didSet {
+            guard controller.updater.automaticallyDownloadsUpdates != automaticallyDownloadsUpdates else { return }
+            controller.updater.automaticallyDownloadsUpdates = automaticallyDownloadsUpdates
+        }
+    }
+
     private let controller: SPUStandardUpdaterController
+    private var cancellables = Set<AnyCancellable>()
 
     init() {
         // `startingUpdater: true` enables Sparkle's automatic background
         // checks at the interval configured by Sparkle (default: 1 day).
         // No delegates needed: standard UI behavior is what we want.
-        self.controller = SPUStandardUpdaterController(
+        let ctrl = SPUStandardUpdaterController(
             startingUpdater: true,
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
+        self.controller = ctrl
+        self.automaticallyChecksForUpdates = ctrl.updater.automaticallyChecksForUpdates
+        self.automaticallyDownloadsUpdates = ctrl.updater.automaticallyDownloadsUpdates
+
+        ctrl.updater.publisher(for: \.automaticallyChecksForUpdates)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] newValue in
+                guard let self, self.automaticallyChecksForUpdates != newValue else { return }
+                self.automaticallyChecksForUpdates = newValue
+            }
+            .store(in: &cancellables)
+
+        ctrl.updater.publisher(for: \.automaticallyDownloadsUpdates)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] newValue in
+                guard let self, self.automaticallyDownloadsUpdates != newValue else { return }
+                self.automaticallyDownloadsUpdates = newValue
+            }
+            .store(in: &cancellables)
     }
 
     /// Manual = user-initiated; shows Sparkle's full UI including

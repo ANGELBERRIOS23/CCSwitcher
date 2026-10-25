@@ -182,3 +182,6 @@
 "Updated %@ ago" = "Actualizado hace %@";
 "Could not save the refreshed sign-in; will retry automatically." = "No se pudo guardar el inicio de sesión renovado; se reintentará automáticamente.";
 "Credential storage is temporarily unavailable. Try again shortly." = "El almacenamiento de credenciales no está disponible temporalmente. Inténtalo de nuevo en unos momentos.";
+
+"Automatically check for updates" = "Buscar actualizaciones automáticamente";
+"Automatically download updates" = "Descargar actualizaciones automáticamente";
