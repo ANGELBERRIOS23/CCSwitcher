@@ -202,3 +202,9 @@
 "usage_storage_write_failed" = "Usage history could not be saved: %@. Existing history was preserved.";
 "usage_storage_scan_failed" = "Source files could not be synchronized. Saved history is still available. %@";
 "usage_storage_sources_paused" = "Usage history is preserved. Updates for %d source files are paused; see the app log for details.";
+
+/* Panel appearance */
+"Panel style" = "Panel style";
+"Warm" = "Warm";
+"Translucent" = "Translucent";
+"Claude" = "Claude";

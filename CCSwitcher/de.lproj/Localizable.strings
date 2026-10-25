@@ -197,3 +197,9 @@
 "usage_storage_write_failed" = "Der Nutzungsverlauf konnte nicht gespeichert werden: %@. Der vorhandene Verlauf wurde beibehalten.";
 "usage_storage_scan_failed" = "Die Quelldateien konnten nicht synchronisiert werden. Der gespeicherte Verlauf bleibt verfügbar. %@";
 "usage_storage_sources_paused" = "Der Nutzungsverlauf wurde beibehalten. Die Aktualisierung von %d Quelldateien ist pausiert; Details stehen im App-Protokoll.";
+
+/* Panel appearance */
+"Panel style" = "Panel-Stil";
+"Warm" = "Warm";
+"Translucent" = "Transparent";
+"Claude" = "Claude";

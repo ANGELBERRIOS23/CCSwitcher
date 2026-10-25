@@ -197,3 +197,9 @@
 "usage_storage_write_failed" = "Impossible d’enregistrer l’historique : %@. L’historique existant a été conservé.";
 "usage_storage_scan_failed" = "Impossible de synchroniser les fichiers sources. L’historique enregistré reste disponible. %@";
 "usage_storage_sources_paused" = "L’historique est conservé. La mise à jour de %d fichiers sources est suspendue ; consultez le journal de l’application.";
+
+/* Panel appearance */
+"Panel style" = "Style du panneau";
+"Warm" = "Chaleureux";
+"Translucent" = "Translucide";
+"Claude" = "Claude";

@@ -197,3 +197,9 @@
 "usage_storage_write_failed" = "无法保存用量历史：%@。已有历史已保留。";
 "usage_storage_scan_failed" = "无法同步原始会话文件，仍可查看已保存的历史。%@";
 "usage_storage_sources_paused" = "用量历史已保留，%d 个源文件的更新已暂停；请查看应用日志了解详情。";
+
+/* Panel appearance */
+"Panel style" = "面板样式";
+"Warm" = "暖色";
+"Translucent" = "半透明";
+"Claude" = "Claude";

@@ -197,3 +197,9 @@
 "usage_storage_write_failed" = "使用履歴を保存できませんでした：%@。既存の履歴は保持されています。";
 "usage_storage_scan_failed" = "元の会話ファイルを同期できませんでした。保存済みの履歴は引き続き参照できます。%@";
 "usage_storage_sources_paused" = "使用履歴は保持されています。%d 個の元ファイルの更新を一時停止しました。詳細はアプリのログを確認してください。";
+
+/* Panel appearance */
+"Panel style" = "パネルのスタイル";
+"Warm" = "ウォーム";
+"Translucent" = "半透明";
+"Claude" = "Claude";
