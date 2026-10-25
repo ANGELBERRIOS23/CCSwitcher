@@ -237,6 +237,7 @@ struct ClassicMainMenuView: View {
                     .buttonStyle(.plain)
                     .focusable(false)
                     .keyboardShortcut(tab.shortcut, modifiers: .command)
+                    .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
                 }
             }
         }
@@ -281,6 +282,7 @@ struct ClassicMainMenuView: View {
             .focusable(false)
             .keyboardShortcut("r", modifiers: .command)
             .help("Refresh")
+            .accessibilityLabel("Refresh")
 
             Button {
                 NSApp.activate(ignoringOtherApps: true)
@@ -293,6 +295,7 @@ struct ClassicMainMenuView: View {
             .focusable(false)
             .keyboardShortcut(",", modifiers: .command)
             .help("Settings")
+            .accessibilityLabel("Settings")
 
             Button {
                 NSApplication.shared.terminate(nil)
@@ -303,6 +306,7 @@ struct ClassicMainMenuView: View {
             .buttonStyle(.plain)
             .focusable(false)
             .help("Quit")
+            .accessibilityLabel("Quit")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)

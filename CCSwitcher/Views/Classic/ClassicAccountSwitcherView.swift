@@ -87,6 +87,7 @@ struct ClassicAccountSwitcherView: View {
                                 .foregroundStyle(.green)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Save")
 
                         Button {
                             editingAccountId = nil
@@ -95,6 +96,7 @@ struct ClassicAccountSwitcherView: View {
                                 .foregroundStyle(.textSecondary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Cancel")
                     }
                 } else {
                     HStack(spacing: 6) {
@@ -111,6 +113,7 @@ struct ClassicAccountSwitcherView: View {
                         }
                         .buttonStyle(.plain)
                         .help("Edit label")
+                        .accessibilityLabel("Edit label")
 
                         if account.isActive {
                             ClassicBadge(text: String(localized: "Active", bundle: L10n.bundle), color: .green)
@@ -178,6 +181,7 @@ struct ClassicAccountSwitcherView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Re-authenticate (fix stale token)")
+                .accessibilityLabel("Re-authenticate (fix stale token)")
 
                 Button {
                     confirmingRemoveId = account.id
@@ -188,6 +192,7 @@ struct ClassicAccountSwitcherView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Remove account")
+                .accessibilityLabel("Remove account")
             }
         }
         .padding(12)

@@ -378,8 +378,10 @@ struct StatusDot: View {
 }
 
 /// Circular icon button on a surface, with hover lift. Shows a spinner while `busy`.
+/// `label` names the button for VoiceOver and is its tooltip.
 struct CircleIconButton: View {
     var icon: String
+    var label: LocalizedStringKey
     var size: CGFloat = 30
     var tint: Color = Theme.dim
     var busy = false
@@ -408,6 +410,8 @@ struct CircleIconButton: View {
         }
         .buttonStyle(PressStyle())
         .focusable(false)
+        .help(label)
+        .accessibilityLabel(label)
         .onHover { hover = $0 }
         .animation(.easeOut(duration: 0.15), value: hover)
     }

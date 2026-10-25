@@ -221,6 +221,7 @@ private struct AccountRow: View {
                         .buttonStyle(PressStyle())
                         .opacity(hover ? 1 : 0)
                         .help("Edit label")
+                        .accessibilityLabel("Edit label")
 
                         if account.isActive {
                             Badge(text: String(localized: "Active", bundle: L10n.bundle), color: Theme.success)
@@ -273,13 +274,12 @@ private struct AccountRow: View {
                             .focusable(false)
                     }
 
-                    CircleIconButton(icon: "arrow.triangle.2.circlepath", size: 26, tint: Theme.warning, action: onReauth)
-                        .help("Re-authenticate (fix stale token)")
+                    CircleIconButton(icon: "arrow.triangle.2.circlepath", label: "Re-authenticate (fix stale token)",
+                                     size: 26, tint: Theme.warning, action: onReauth)
 
-                    CircleIconButton(icon: "trash", size: 26, tint: Theme.danger) {
+                    CircleIconButton(icon: "trash", label: "Remove account", size: 26, tint: Theme.danger) {
                         withAnimation(Theme.ease) { confirmingRemove = true }
                     }
-                    .help("Remove account")
                 }
             }
         }
@@ -323,12 +323,14 @@ private struct AccountRow: View {
                     .foregroundStyle(Theme.success)
             }
             .buttonStyle(PressStyle())
+            .accessibilityLabel("Save")
 
             Button(action: onCancelEdit) {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundStyle(Theme.dim)
             }
             .buttonStyle(PressStyle())
+            .accessibilityLabel("Cancel")
         }
     }
 }

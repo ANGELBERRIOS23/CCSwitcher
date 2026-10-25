@@ -311,11 +311,10 @@ struct MainMenuView: View {
 
             Spacer(minLength: 8)
 
-            CircleIconButton(icon: "arrow.clockwise", size: 32, busy: appState.isLoading) {
+            CircleIconButton(icon: "arrow.clockwise", label: "Refresh", size: 32, busy: appState.isLoading) {
                 Task { await appState.refresh() }
             }
             .keyboardShortcut("r", modifiers: .command)
-            .help("Refresh")
         }
         .padding(.horizontal, Theme.pad)
         .padding(.top, 14)
@@ -399,7 +398,7 @@ struct MainMenuView: View {
 
             Spacer()
 
-            CircleIconButton(icon: "gearshape", size: 26) {
+            CircleIconButton(icon: "gearshape", label: "Settings", size: 26) {
                 NSApp.activate(ignoringOtherApps: true)
                 NotificationCenter.default.post(
                     name: .ccswitcherOpenSettings,
@@ -407,12 +406,10 @@ struct MainMenuView: View {
                 )
             }
             .keyboardShortcut(",", modifiers: .command)
-            .help("Settings")
 
-            CircleIconButton(icon: "power", size: 26) {
+            CircleIconButton(icon: "power", label: "Quit", size: 26) {
                 NSApplication.shared.terminate(nil)
             }
-            .help("Quit")
         }
         .padding(.horizontal, Theme.pad)
         .padding(.vertical, 10)
@@ -462,6 +459,7 @@ private struct TabButton: View {
         }
         .buttonStyle(PressStyle())
         .focusable(false)
+        .accessibilityAddTraits(selected ? .isSelected : [])
         .onHover { hover = $0 }
         .animation(.easeOut(duration: 0.15), value: hover)
     }
