@@ -46,7 +46,7 @@ struct SettingsView: View {
 
     private var generalTab: some View {
         Form {
-            Section("Refresh") {
+            Section("Auto-switch") {
                 Picker("Auto-refresh interval", selection: $refreshInterval) {
                     Text("15 seconds").tag(15.0)
                     Text("30 seconds").tag(30.0)
@@ -57,9 +57,7 @@ struct SettingsView: View {
                 .onChange(of: refreshInterval) { _, newValue in
                     appState.startAutoRefresh(interval: newValue)
                 }
-            }
 
-            Section("Auto-switch") {
                 Toggle("Switch account before hitting the limit", isOn: $autoSwitchEnabled)
                 if autoSwitchEnabled {
                     VStack(alignment: .leading, spacing: 6) {
@@ -78,10 +76,6 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Account display") {
-                Toggle("Show full email address", isOn: $showFullEmail)
-            }
-
             Section("Appearance") {
                 Picker("Language", selection: $appLanguage) {
                     Text("Automatic").tag("auto")
@@ -96,6 +90,8 @@ struct SettingsView: View {
                 .onChange(of: appLanguage) { _, newValue in
                     applyLanguage(newValue)
                 }
+
+                Toggle("Show full email address", isOn: $showFullEmail)
             }
 
             Section("System") {
