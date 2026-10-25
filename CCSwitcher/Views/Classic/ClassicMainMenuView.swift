@@ -243,6 +243,15 @@ struct ClassicMainMenuView: View {
                     .foregroundStyle(.textSecondary)
                     .lineLimit(3)
                     .help(error)
+            } else if let info = appState.infoMessage {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .font(.caption)
+                Text(info)
+                    .font(.caption2)
+                    .foregroundStyle(.textSecondary)
+                    .lineLimit(3)
+                    .help(info)
             }
 
             Spacer()

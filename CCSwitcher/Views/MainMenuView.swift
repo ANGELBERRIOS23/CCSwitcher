@@ -368,6 +368,15 @@ struct MainMenuView: View {
                     .foregroundStyle(Theme.dim)
                     .lineLimit(3)
                     .help(error)
+            } else if let info = appState.infoMessage {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(Theme.success)
+                    .font(.caption)
+                Text(info)
+                    .font(.caption2)
+                    .foregroundStyle(Theme.dim)
+                    .lineLimit(3)
+                    .help(info)
             } else if let lastRefresh = appState.lastUsageRefresh {
                 Image(systemName: "clock")
                     .font(.caption2)
