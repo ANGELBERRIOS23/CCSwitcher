@@ -7,10 +7,15 @@ struct Badge: View {
 
     var body: some View {
         Text(text)
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, AppStyle.badgeHPadding)
+            .font(.system(size: 10, weight: .semibold, design: .rounded))
+            .foregroundStyle(color)
+            .padding(.horizontal, AppStyle.badgeHPadding + 1)
             .padding(.vertical, AppStyle.badgeVPadding)
-            .background(color, in: Capsule())
+            .background(
+                Capsule()
+                    .fill(color.opacity(0.14))
+                    .overlay(Capsule().strokeBorder(color.opacity(0.28), lineWidth: 0.5))
+            )
+            .fixedSize()
     }
 }

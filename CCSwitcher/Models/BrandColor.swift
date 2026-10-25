@@ -5,7 +5,8 @@ import SwiftUI
 extension Color {
     /// CCSwitcher brand color.
     // static let brand = Color(red: 0x7C / 255.0, green: 0x3A / 255.0, blue: 0xED / 255.0) // #7C3AED
-    static let brand = Color(red: 0xE8 / 255.0, green: 0x6D / 255.0, blue: 0x45 / 255.0) // #E86D45
+    // static let brand = Color(red: 0xE8 / 255.0, green: 0x6D / 255.0, blue: 0x45 / 255.0) // #E86D45
+    static let brand = Color(red: 0xD9 / 255.0, green: 0x77 / 255.0, blue: 0x57 / 255.0) // #D97757 (Claude terracotta)
 
     /// Creates a color that automatically adapts between light and dark appearance.
     static func adaptive(light: Color, dark: Color) -> Color {

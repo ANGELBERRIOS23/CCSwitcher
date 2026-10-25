@@ -69,6 +69,7 @@ struct MainMenuView: View {
     @AppStorage("refreshInterval") private var refreshInterval: Double = 300
     @AppStorage("showFullEmail") private var showFullEmail = false
     @State private var selectedTab: Tab = .usage
+    @Namespace private var tabIndicator
 
     // Measured heights driving the popover frame.
     // Defaults are reasonable fallbacks for the first render pass, before
@@ -101,15 +102,18 @@ struct MainMenuView: View {
             // Header
             headerView
                 .measureChromeHeight()
+                .enter(0)
 
             if isPromoActive() {
                 promoBannerView
                     .measureChromeHeight()
+                    .enter(1)
             }
 
             // Tab selector
             tabBar
                 .measureChromeHeight()
+                .enter(1)
 
             // Content
             Group {
@@ -122,21 +126,30 @@ struct MainMenuView: View {
                     AccountSwitcherView()
                 }
             }
+            .id(selectedTab)
+            .transition(.opacity.combined(with: .offset(y: 6)))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .enter(2)
 
-            Divider()
+            Rectangle()
+                .fill(Theme.hairline)
+                .frame(height: 1)
+                .padding(.horizontal, Theme.pad)
 
             // Footer
             footerView
                 .measureChromeHeight()
+                .enter(3)
         }
         .frame(width: 360, height: popoverHeight)
-        .animation(.easeInOut(duration: 0.2), value: popoverHeight)
+        .animation(Theme.spring, value: popoverHeight)
+        .foregroundStyle(Theme.text)
+        .fontDesign(.rounded)
         .background(
             // Probe: report the actual rendered size of the outer VStack
             // (after .frame is applied). If this doesn't match popoverHeight,
             // we have a frame-not-applied problem; if it matches but the
-            // popover panel is still bigger, the issue is the panel itself.
+            // panel is still bigger, the issue is the panel itself.
             GeometryReader { geo in
                 Color.clear
                     .onAppear {
@@ -147,7 +160,6 @@ struct MainMenuView: View {
                     }
             }
         )
-        .background(.ultraThinMaterial)
         .onAppear {
             popoverLog.info("[appear] tab=\(self.selectedTab.rawValue) chrome=\(self.chromeHeight) usage=\(self.usageContentHeight) popover=\(self.popoverHeight)")
         }
@@ -187,28 +199,33 @@ struct MainMenuView: View {
     }
 
     // MARK: - Promo Banner
-    
+
     private var promoBannerView: some View {
-        HStack {
+        HStack(spacing: 10) {
             Image(systemName: "gift.fill")
-                .foregroundStyle(.brand)
-            
-            VStack(alignment: .leading, spacing: 2) {
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.glow)
+                .symbolEffect(.pulse, options: .repeating)
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(Theme.accent.opacity(0.14)))
+
+            VStack(alignment: .leading, spacing: 1) {
                 Text("Double Usage Active")
-                    .font(.caption)
-                    .fontWeight(.medium)
+                    .font(.caption.weight(.semibold))
                 Text(localOffPeakTimeString)
                     .font(.caption2)
-                    .foregroundStyle(.textSecondary)
+                    .foregroundStyle(Theme.dim)
             }
-            
+
             Spacer()
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(.subtleBrand)
+        .surface(fill: Theme.accent.opacity(0.10))
+        .padding(.horizontal, Theme.pad)
+        .padding(.bottom, 10)
     }
-    
+
     private func isPromoActive() -> Bool {
         // Banner visibility tracks the campaign window; the menu-bar icon uses
         // `DoubleUsagePromo.isActive` for the currently-doubled state. Both now
@@ -245,142 +262,163 @@ struct MainMenuView: View {
     // MARK: - Header
 
     private var headerView: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "brain.head.profile")
-                .font(.title2)
-                .foregroundStyle(.brand)
+        HStack(spacing: 12) {
+            if let account = appState.activeAccount {
+                Avatar(name: account.effectiveDisplayName(obfuscated: !showFullEmail),
+                       icon: account.provider.iconName, size: 38)
 
-            VStack(alignment: .leading, spacing: 3) {
-                if let account = appState.activeAccount {
+                VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(account.effectiveDisplayName(obfuscated: !showFullEmail))
-                            .font(.headline)
+                            .font(.system(size: 14, weight: .semibold))
+                            .lineLimit(1)
                         if let sub = account.displaySubscriptionType {
-                            Badge(text: sub, color: .brand)
+                            Badge(text: sub, color: Theme.glow)
                         }
                     }
-                    Text(account.displayEmail(obfuscated: !showFullEmail))
-                        .font(.caption)
-                        .foregroundStyle(.textSecondary)
-                } else {
+                    HStack(spacing: 6) {
+                        StatusDot(state: status)
+                        Text(account.displayEmail(obfuscated: !showFullEmail))
+                            .font(.caption)
+                            .foregroundStyle(Theme.dim)
+                            .lineLimit(1)
+                    }
+                }
+            } else {
+                Avatar(name: "", icon: "brain.head.profile", active: false, size: 38)
+
+                VStack(alignment: .leading, spacing: 3) {
                     Text("CCSwitcher")
-                        .font(.headline)
-                    Text("No account connected")
-                        .font(.caption)
-                        .foregroundStyle(.textSecondary)
+                        .font(.system(size: 14, weight: .semibold))
+                    HStack(spacing: 6) {
+                        StatusDot(state: status)
+                        Text("No account connected")
+                            .font(.caption)
+                            .foregroundStyle(Theme.dim)
+                    }
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 8)
 
-            if appState.isLoading {
-                ProgressView()
-                    .controlSize(.small)
+            CircleIconButton(icon: "arrow.clockwise", size: 32, busy: appState.isLoading) {
+                Task { await appState.refresh() }
             }
+            .help("Refresh")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, Theme.pad)
+        .padding(.top, 14)
+        .padding(.bottom, 12)
+    }
+
+    private var status: StatusDot.State {
+        if appState.errorMessage != nil { return .error }
+        if appState.isLoading { return .syncing }
+        return appState.activeAccount == nil ? .idle : .connected
     }
 
     // MARK: - Tab Bar
 
     private var tabBar: some View {
-        ZStack {
-            // Background capsule
-            Capsule()
-                .fill(.tabFill)
-                .overlay(Capsule().stroke(.tabBorder, lineWidth: 1))
-
-            // Sliding indicator
-            GeometryReader { geo in
-                let count = CGFloat(Tab.allCases.count)
-                let tabWidth = geo.size.width / count
-                let index = CGFloat(Tab.allCases.firstIndex(of: selectedTab) ?? 0)
-                Capsule()
-                    .fill(Color.brand)
-                    .padding(2)
-                    .frame(width: tabWidth)
-                    .offset(x: tabWidth * index)
-                    .animation(.easeInOut(duration: 0.15), value: selectedTab)
-            }
-
-            // Tab labels on top
-            HStack(spacing: 0) {
-                ForEach(Tab.allCases, id: \.self) { tab in
-                    VStack(spacing: 2) {
-                        Image(systemName: tab.iconName)
-                            .font(.system(size: 12))
-                        Text(tab.localizedTitle)
-                            .font(.caption2.weight(.semibold))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
-                    .foregroundStyle(selectedTab == tab ? .white : .textSecondary)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            selectedTab = tab
-                        }
-                    }
+        HStack(spacing: 2) {
+            ForEach(Tab.allCases, id: \.self) { tab in
+                TabButton(
+                    title: tab.localizedTitle,
+                    icon: tab.iconName,
+                    selected: selectedTab == tab,
+                    namespace: tabIndicator
+                ) {
+                    withAnimation(Theme.spring) { selectedTab = tab }
                 }
             }
         }
-        .frame(width: 260, height: 44)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 4)
+        .padding(3)
+        .background(
+            Capsule()
+                .fill(Theme.well)
+                .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 0.5))
+        )
+        .padding(.horizontal, Theme.pad)
+        .padding(.bottom, 6)
     }
 
     // MARK: - Footer
 
     private var footerView: some View {
-        HStack {
+        HStack(spacing: 8) {
             if let error = appState.errorMessage {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Theme.warning)
                     .font(.caption)
                 Text(error)
                     .font(.caption2)
-                    .foregroundStyle(.textSecondary)
+                    .foregroundStyle(Theme.dim)
                     .lineLimit(1)
+            } else if let lastRefresh = appState.lastUsageRefresh {
+                Image(systemName: "clock")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.faint)
+                Text(lastRefresh, style: .relative)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(Theme.dim)
             }
 
             Spacer()
 
-            Button {
-                Task { await appState.refresh() }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.caption)
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .help("Refresh")
-
-            Button {
+            CircleIconButton(icon: "gearshape", size: 26) {
                 NSApp.activate(ignoringOtherApps: true)
                 NotificationCenter.default.post(
                     name: .ccswitcherOpenSettings,
                     object: nil
                 )
-            } label: {
-                Image(systemName: "gear")
-                    .font(.caption)
             }
-            .buttonStyle(.plain)
-            .focusable(false)
             .help("Settings")
 
-            Button {
+            CircleIconButton(icon: "power", size: 26) {
                 NSApplication.shared.terminate(nil)
-            } label: {
-                Image(systemName: "power")
-                    .font(.caption)
             }
-            .buttonStyle(.plain)
-            .focusable(false)
             .help("Quit")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, Theme.pad)
+        .padding(.vertical, 10)
+    }
+}
+
+/// One segment of the tab bar; the selected one carries the sliding terracotta pill.
+private struct TabButton: View {
+    var title: LocalizedStringKey
+    var icon: String
+    var selected: Bool
+    var namespace: Namespace.ID
+    var action: () -> Void
+    @State private var hover = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(selected ? .white : (hover ? Theme.text : Theme.dim))
+            .frame(maxWidth: .infinity)
+            .frame(height: 28)
+            .background {
+                if selected {
+                    Capsule()
+                        .fill(Theme.accentGradient)
+                        .overlay(Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5))
+                        .shadow(color: Theme.glow.opacity(0.35), radius: 6, y: 2)
+                        .matchedGeometryEffect(id: "tab", in: namespace)
+                }
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(PressStyle())
+        .focusable(false)
+        .onHover { hover = $0 }
+        .animation(.easeOut(duration: 0.15), value: hover)
     }
 }
