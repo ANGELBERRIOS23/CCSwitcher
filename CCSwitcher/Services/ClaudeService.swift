@@ -22,6 +22,11 @@ final class ClaudeService: @unchecked Sendable {
     private var _setPathGeneration: UInt64 = 0
     private var _activeLoginProcess: Process?
     private var _loginCancelled = false
+    /// Held while the launch-time path lookup runs; CLI calls wait for it.
+    /// Falling through to the login-shell lookup can take up to 3 s, and
+    /// `shared` is first touched on the main thread at launch, so that
+    /// lookup runs in the background instead of in the initializer.
+    private let initialLookup = DispatchGroup()
 
     /// Currently active path. Thread-safe.
     var claudePath: String {
@@ -34,13 +39,30 @@ final class ClaudeService: @unchecked Sendable {
         if !preference.isEmpty, FileManager.default.isExecutableFile(atPath: preference) {
             self._claudePath = preference
             log.info("Claude binary path: \(preference) (user preference)")
-        } else {
+            return
+        }
+        if !preference.isEmpty {
+            log.warning("Saved preference \(preference) is no longer valid; falling back to auto")
+        }
+        if let curated = Self.curatedPath() {
+            self._claudePath = curated
+            log.info("Claude binary path: \(curated) (curated)")
+            return
+        }
+
+        // Placeholder until the lookup finishes. Both CLI runners wait for it,
+        // so no CLI call runs with this.
+        self._claudePath = "claude"
+        initialLookup.enter()
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
             let auto = Self.autoSelectedPath()
-            self._claudePath = auto.path
-            log.info("Claude binary path: \(auto.path) (\(auto.source))")
-            if !preference.isEmpty {
-                log.warning("Saved preference \(preference) is no longer valid; falling back to auto")
-            }
+            lock.lock()
+            // A path picked in Settings in the meantime wins.
+            let apply = _setPathGeneration == 0
+            if apply { _claudePath = auto.path }
+            lock.unlock()
+            if apply { log.info("Claude binary path: \(auto.path) (\(auto.source))") }
+            initialLookup.leave()
         }
     }
 
@@ -77,8 +99,8 @@ final class ClaudeService: @unchecked Sendable {
 
     /// Today's 3-tier fallback: curated → shell PATH → bare "claude".
     static func autoSelectedPath() -> (path: String, source: String) {
-        for candidate in curatedPathCandidates() where FileManager.default.fileExists(atPath: candidate) {
-            return (candidate, "curated")
+        if let curated = curatedPath() {
+            return (curated, "curated")
         }
         if let shellPath = shellPathLookup() {
             return (shellPath, "shell PATH")
@@ -111,6 +133,10 @@ final class ClaudeService: @unchecked Sendable {
         }
 
         return result
+    }
+
+    private static func curatedPath() -> String? {
+        curatedPathCandidates().first { FileManager.default.fileExists(atPath: $0) }
     }
 
     private static func curatedPathCandidates() -> [String] {
@@ -733,10 +759,12 @@ final class ClaudeService: @unchecked Sendable {
     // MARK: - CLI Runner
 
     private func runClaudeLogin(onAuthURL: (@Sendable (URL) -> Void)?) async throws -> String {
-        let claudePath = self.claudePath
-        log.debug("[runClaudeLogin] Running: \(claudePath) auth login")
         return try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async { [weak self, claudePath] in
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                // Returns at once unless the launch-time path lookup is still running.
+                self?.initialLookup.wait()
+                let claudePath = self?.claudePath ?? "claude"
+                log.debug("[runClaudeLogin] Running: \(claudePath) auth login")
                 let process = Process()
                 let pipe = Pipe()
 
@@ -888,10 +916,12 @@ final class ClaudeService: @unchecked Sendable {
     }
 
     private func runClaude(args: [String]) async throws -> String {
-        let claudePath = self.claudePath
-        log.debug("[runClaude] Running: \(claudePath) \(args.joined(separator: " "))")
         return try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async { [claudePath] in
+            DispatchQueue.global(qos: .userInitiated).async { [self] in
+                // Returns at once unless the launch-time path lookup is still running.
+                initialLookup.wait()
+                let claudePath = self.claudePath
+                log.debug("[runClaude] Running: \(claudePath) \(args.joined(separator: " "))")
                 let process = Process()
                 let pipe = Pipe()
 
