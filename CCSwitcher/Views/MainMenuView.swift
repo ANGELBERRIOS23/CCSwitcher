@@ -96,6 +96,15 @@ struct MainMenuView: View {
             case .accounts: "person.2.fill"
             }
         }
+
+        /// ⌘1 / ⌘2 / ⌘3, in tab-bar order.
+        var shortcut: KeyEquivalent {
+            switch self {
+            case .usage: "1"
+            case .costs: "2"
+            case .accounts: "3"
+            }
+        }
     }
 
     var body: some View {
@@ -305,6 +314,7 @@ struct MainMenuView: View {
             CircleIconButton(icon: "arrow.clockwise", size: 32, busy: appState.isLoading) {
                 Task { await appState.refresh() }
             }
+            .keyboardShortcut("r", modifiers: .command)
             .help("Refresh")
         }
         .padding(.horizontal, Theme.pad)
@@ -331,6 +341,7 @@ struct MainMenuView: View {
                 ) {
                     withAnimation(Theme.spring) { selectedTab = tab }
                 }
+                .keyboardShortcut(tab.shortcut, modifiers: .command)
             }
         }
         .padding(3)
@@ -395,6 +406,7 @@ struct MainMenuView: View {
                     object: nil
                 )
             }
+            .keyboardShortcut(",", modifiers: .command)
             .help("Settings")
 
             CircleIconButton(icon: "power", size: 26) {

@@ -35,6 +35,15 @@ struct ClassicMainMenuView: View {
             case .accounts: "person.2.fill"
             }
         }
+
+        /// ⌘1 / ⌘2 / ⌘3, in tab-bar order.
+        var shortcut: KeyEquivalent {
+            switch self {
+            case .usage: "1"
+            case .costs: "2"
+            case .accounts: "3"
+            }
+        }
     }
 
     var body: some View {
@@ -207,21 +216,27 @@ struct ClassicMainMenuView: View {
 
             HStack(spacing: 0) {
                 ForEach(Tab.allCases, id: \.self) { tab in
-                    VStack(spacing: 2) {
-                        Image(systemName: tab.iconName)
-                            .font(.system(size: 12))
-                        Text(tab.localizedTitle)
-                            .font(.caption2.weight(.semibold))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
-                    .foregroundStyle(selectedTab == tab ? .white : .textSecondary)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
+                    // A plain button rather than a tap gesture, so ⌘1/⌘2/⌘3
+                    // can reach it; it looks the same.
+                    Button {
                         withAnimation(.easeInOut(duration: 0.15)) {
                             selectedTab = tab
                         }
+                    } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: tab.iconName)
+                                .font(.system(size: 12))
+                            Text(tab.localizedTitle)
+                                .font(.caption2.weight(.semibold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .foregroundStyle(selectedTab == tab ? .white : .textSecondary)
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .focusable(false)
+                    .keyboardShortcut(tab.shortcut, modifiers: .command)
                 }
             }
         }
@@ -264,6 +279,7 @@ struct ClassicMainMenuView: View {
             }
             .buttonStyle(.plain)
             .focusable(false)
+            .keyboardShortcut("r", modifiers: .command)
             .help("Refresh")
 
             Button {
@@ -275,6 +291,7 @@ struct ClassicMainMenuView: View {
             }
             .buttonStyle(.plain)
             .focusable(false)
+            .keyboardShortcut(",", modifiers: .command)
             .help("Settings")
 
             Button {
