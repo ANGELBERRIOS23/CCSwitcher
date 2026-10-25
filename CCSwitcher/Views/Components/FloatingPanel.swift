@@ -186,12 +186,12 @@ final class PopoverController {
     }
 
     func hide() {
-        guard model.shown else { return }
-        model.shown = false
         if let m = globalMonitor {
             NSEvent.removeMonitor(m)
             globalMonitor = nil
         }
+        guard model.shown else { return }
+        model.shown = false
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(180))
             guard let self, !self.model.shown else { return }

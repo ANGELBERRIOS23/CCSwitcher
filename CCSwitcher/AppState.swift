@@ -221,13 +221,17 @@ final class AppState: ObservableObject {
             claimedAccountId: claimedId,
             matchingBackupOwner: { [weak self] token in
                 guard let self else { return nil }
-                return self.accounts.first(where: { account in
+                let matches = self.accounts.filter { account in
                     guard let backup = self.keychain.getAccountBackup(forAccountId: account.id.uuidString),
                           let backupToken = ClaudeService.extractAccessToken(from: backup.token) else {
                         return false
                     }
                     return backupToken == token
-                })?.id
+                }.map(\.id)
+                if let claimedId, matches.contains(claimedId) {
+                    return claimedId
+                }
+                return matches.first
             }
         )
     }
@@ -241,13 +245,14 @@ final class AppState: ObservableObject {
         credentialAnchor.anchor(accountId: accountId, accessToken: accessToken)
     }
 
-    /// Back up the live credential as `account`'s, but only when it really is.
-    /// Storing it otherwise overwrites one account's saved token with another's,
-    /// which survives every later switch and silently spends the wrong quota.
+    /// Back up the live credential as `account`'s, but only when both the live
+    /// token and `~/.claude.json` are confirmed in sync (`case .owned`).
+    /// When `.desynced`, `~/.claude.json` holds another account's `oauthAccount`,
+    /// so capturing would corrupt `account`'s saved identity block.
     @discardableResult
     private func captureLiveCredential(as account: Account) -> Bool {
-        guard liveCredentialOwner().credentialAccountId == account.id else {
-            log.warning("[capture] Live credential is not confirmed to be \(account.email)'s; skipping backup rather than storing it under the wrong account")
+        guard liveCredentialOwner() == .owned(account.id) else {
+            log.warning("[capture] Live credential is not cleanly owned by \(account.email) (desynced or unknown); skipping backup")
             return false
         }
         let captured = claudeService.captureCurrentCredentials(forAccountId: account.id.uuidString)
@@ -543,10 +548,10 @@ final class AppState: ObservableObject {
         lastAutoSwitchAt = Date()
 
         // Whether the credential about to be backed up really is the outgoing
-        // account's. Resolved here, where the account list lives, and handed
-        // down for the same reason `targetBackup` is: the switch must not
-        // re-derive it from the identity block one layer lower.
-        let liveCredentialIsSource = liveCredentialOwner().credentialAccountId == currentActive.id
+        // account's AND ~/.claude.json is still in sync with it (`.owned`).
+        // If `.desynced`, ~/.claude.json carries another account's identity block,
+        // so Step 1 must skip overwriting the outgoing account's backup.
+        let liveCredentialIsSource = liveCredentialOwner() == .owned(currentActive.id)
 
         isLoading = true
         do {
