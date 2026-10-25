@@ -27,6 +27,9 @@ final class ClaudeService: @unchecked Sendable {
     /// `shared` is first touched on the main thread at launch, so that
     /// lookup runs in the background instead of in the initializer.
     private let initialLookup = DispatchGroup()
+    /// The binary `isClaudeAvailable()` last saw run. Cleared by any failed
+    /// CLI call, so a broken install is checked again on the next refresh.
+    private var _verifiedBinary: ClaudeBinaryStamp?
 
     /// Currently active path. Thread-safe.
     var claudePath: String {
@@ -235,15 +238,39 @@ final class ClaudeService: @unchecked Sendable {
         return status
     }
 
+    /// Every refresh asks this first. Spawning `claude --version` each time
+    /// costs a full CLI start-up, so once it has succeeded the answer is
+    /// reused for as long as the path still resolves to that same file.
     func isClaudeAvailable() async -> Bool {
+        let path = claudePath
+        let stamp = ClaudeBinaryStamp(path: path)
+        if let stamp, stamp == verifiedBinary {
+            return true
+        }
         do {
             let version = try await runClaude(args: ["--version"])
             log.info("[isClaudeAvailable] YES, version: \(version.trimmingCharacters(in: .whitespacesAndNewlines))")
+            if let stamp, claudePath == path {
+                setVerifiedBinary(stamp)
+            }
             return true
         } catch {
             log.error("[isClaudeAvailable] NO, error: \(error.localizedDescription)")
             return false
         }
+    }
+
+    private var verifiedBinary: ClaudeBinaryStamp? {
+        lock.lock(); defer { lock.unlock() }
+        return _verifiedBinary
+    }
+
+    private func setVerifiedBinary(_ stamp: ClaudeBinaryStamp?) {
+        lock.lock(); _verifiedBinary = stamp; lock.unlock()
+    }
+
+    private func forgetVerifiedBinary() {
+        setVerifiedBinary(nil)
     }
 
     // MARK: - Usage API
@@ -966,14 +993,40 @@ final class ClaudeService: @unchecked Sendable {
                         continuation.resume(returning: output)
                     } else {
                         log.error("[runClaude] Failed (exit \(process.terminationStatus))")
+                        forgetVerifiedBinary()
                         continuation.resume(throwing: ClaudeServiceError.cliError("exit \(process.terminationStatus)"))
                     }
                 } catch {
                     log.error("[runClaude] Process launch failed: \(error.localizedDescription)")
+                    forgetVerifiedBinary()
                     continuation.resume(throwing: ClaudeServiceError.processLaunchFailed(error))
                 }
             }
         }
+    }
+}
+
+/// The file a claude path resolves to, as of when it was checked. A changed
+/// stamp means an update, a reinstall or another install, which has to be
+/// run again before it counts as available.
+private struct ClaudeBinaryStamp: Equatable {
+    let path: String
+    let resolvedPath: String
+    let fileNumber: UInt64?
+    let size: UInt64?
+    let modified: Date?
+
+    /// Nil for the bare "claude" fallback, which only the PATH lookup inside
+    /// the subprocess resolves, so it is checked every time as before.
+    init?(path: String) {
+        guard path.hasPrefix("/") else { return nil }
+        let resolved = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: resolved) else { return nil }
+        self.path = path
+        self.resolvedPath = resolved
+        self.fileNumber = (attrs[.systemFileNumber] as? NSNumber)?.uint64Value
+        self.size = (attrs[.size] as? NSNumber)?.uint64Value
+        self.modified = attrs[.modificationDate] as? Date
     }
 }
 
