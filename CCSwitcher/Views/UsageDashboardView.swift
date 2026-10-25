@@ -35,18 +35,25 @@ struct UsageDashboardView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 40)
                 } else if appState.accounts.isEmpty {
+                    // Same copy as the Accounts tab's empty state. The
+                    // padding is trimmed so the popover keeps its height.
                     VStack(spacing: 12) {
                         Image(systemName: "chart.bar.xaxis")
                             .font(.system(size: 30, weight: .light))
                             .foregroundStyle(Theme.glow)
                             .frame(width: 64, height: 64)
                             .surface(radius: 32)
-                        Text("Usage data unavailable")
-                            .font(.subheadline)
-                            .foregroundStyle(Theme.dim)
+                        VStack(spacing: 4) {
+                            Text("No Accounts")
+                                .font(.headline)
+                            Text("Add your current Claude Code account to get started.")
+                                .font(.caption)
+                                .foregroundStyle(Theme.dim)
+                                .multilineTextAlignment(.center)
+                        }
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 36)
+                    .padding(.vertical, 26)
                 } else {
                     // Today's cost (local parsing, no API needed)
                     todayCostBanner
