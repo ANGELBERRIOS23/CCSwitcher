@@ -156,6 +156,14 @@ targets:
       - path: CCSwitcher/Services/L10n.swift
       - path: CCSwitcher/Models/CostData.swift
       - path: CCSwitcher/Models/ActivityData.swift
+      # For AutoSwitchEngineTests, CLIVersionParsingTests, ClaudeJSONRewriteTests
+      - path: CCSwitcher/Services/AutoSwitchEngine.swift
+      - path: CCSwitcher/Services/ClaudeService.swift
+      - path: CCSwitcher/Services/SwitchSafety.swift
+      - path: CCSwitcher/Services/KeychainService.swift
+      - path: CCSwitcher/Models/Account.swift
+      - path: CCSwitcher/Models/UsageData.swift
+      - path: CCSwitcher/Models/String+Obfuscation.swift
     dependencies:
       - package: GRDB
     settings:
