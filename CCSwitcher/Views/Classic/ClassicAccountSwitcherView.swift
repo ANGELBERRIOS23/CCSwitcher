@@ -62,7 +62,7 @@ struct ClassicAccountSwitcherView: View {
         HStack(spacing: 12) {
             Image(systemName: account.provider.iconName)
                 .font(.title2)
-                .foregroundStyle(account.isActive ? Classic.brand : .secondary)
+                .foregroundStyle(account.isActive ? Classic.brand : .textSecondary)
                 .frame(width: 32, height: 32)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -188,7 +188,7 @@ struct ClassicAccountSwitcherView: View {
                     .foregroundStyle(.textSecondary)
                 Text("Complete the login in your browser, then return here.")
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Classic.tertiaryText)
                     .multilineTextAlignment(.center)
 
                 // Added after 1.x: copy the login link (for another browser)

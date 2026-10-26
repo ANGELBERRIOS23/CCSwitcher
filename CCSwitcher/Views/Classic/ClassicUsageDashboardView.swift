@@ -165,14 +165,14 @@ struct ClassicUsageDashboardView: View {
             VStack(spacing: 3) {
                 Text("\(count)")
                     .font(.subheadline.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(count > 0 ? .primary : .quaternary)
+                    .foregroundStyle(count > 0 ? Color.primary : Classic.quaternaryText)
                 HStack(spacing: 3) {
                     Circle()
                         .fill(modelColor(name))
                         .frame(width: 7, height: 7)
                     Text(name)
                         .font(.caption2)
-                        .foregroundStyle(count > 0 ? .tertiary : .quaternary)
+                        .foregroundStyle(count > 0 ? Classic.tertiaryText : Classic.quaternaryText)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -214,7 +214,7 @@ struct ClassicUsageDashboardView: View {
                 // a waiting state, not an error.
                 HStack {
                     Image(systemName: "hourglass")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.textSecondary)
                     Text("Waiting for usage data...")
                         .font(.caption)
                         .foregroundStyle(.textSecondary)
@@ -251,7 +251,7 @@ struct ClassicUsageDashboardView: View {
         HStack(spacing: 8) {
             Image(systemName: account.provider.iconName)
                 .font(.subheadline)
-                .foregroundStyle(account.isActive ? Classic.brand : .secondary)
+                .foregroundStyle(account.isActive ? Classic.brand : .textSecondary)
 
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {

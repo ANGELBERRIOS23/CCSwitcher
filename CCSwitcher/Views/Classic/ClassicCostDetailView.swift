@@ -157,7 +157,7 @@ struct ClassicCostDetailView: View {
         return HStack(spacing: 8) {
             Text(shortDate(day.date))
                 .font(.caption2.monospacedDigit())
-                .foregroundStyle(isToday ? Classic.brand : .secondary)
+                .foregroundStyle(isToday ? Classic.brand : .textSecondary)
                 .frame(width: 40, alignment: .leading)
 
             Text(Formatted.amount(day.totalCost, locale: L10n.locale))
