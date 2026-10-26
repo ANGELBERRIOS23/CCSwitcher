@@ -2,7 +2,7 @@ name: Build and Notarize macOS App
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, build-propia ]
     tags:
       - 'v*'
   pull_request:
@@ -123,6 +123,41 @@ jobs:
 
           # Verify everything is correctly sealed for notarization
           codesign --verify --deep --strict --verbose=2 "$APP"
+
+      - name: Ad-hoc Sign App (no Apple secrets)
+        # Fork builds have no Developer ID, and an unsigned bundle with an
+        # embedded extension won't launch. Sign ad-hoc (`-`) in the same
+        # nested-first order as "Sign App" so the bundle seal verifies.
+        # Gatekeeper still blocks it until the quarantine flag is cleared.
+        if: ${{ env.HAS_APPLE_SECRETS != 'true' }}
+        run: |
+          APP=build/Release/CCSwitcher.app
+          SPARKLE_V="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
+
+          for nested in \
+            "$SPARKLE_V/XPCServices/Downloader.xpc" \
+            "$SPARKLE_V/XPCServices/Installer.xpc" \
+            "$SPARKLE_V/Updater.app" \
+            "$SPARKLE_V/Autoupdate" \
+            "$APP/Contents/Frameworks/Sparkle.framework"; do
+            if [ -e "$nested" ]; then
+              codesign --force --sign - \
+                --preserve-metadata=identifier,entitlements,flags \
+                "$nested"
+            fi
+          done
+
+          codesign --force --sign - \
+            --entitlements CCSwitcherWidget/Resources/CCSwitcherWidget.entitlements \
+            "$APP/Contents/Extensions/CCSwitcherWidgetExtension.appex"
+
+          codesign --force --sign - \
+            --entitlements CCSwitcher/Resources/CCSwitcher.entitlements \
+            "$APP"
+
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -d --entitlements - "$APP"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist"
 
       - name: Create DMG
         run: |
@@ -351,7 +386,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Trigger Homebrew Tap Update
-        if: startsWith(github.ref, 'refs/tags/v') && success()
+        if: github.repository == 'XueshiQiao/CCSwitcher' && startsWith(github.ref, 'refs/tags/v') && success()
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.HOMEBREW_TAP_PAT }}

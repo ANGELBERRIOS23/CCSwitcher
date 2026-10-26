@@ -41,7 +41,11 @@ struct WidgetData: Codable, Sendable {
     private static let fileName = "widget-data.json"
 
     private static var sharedContainerURL: URL? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID)
+        // Fork build: signed ad-hoc, so there is no Team ID to match the App
+        // Group, and macOS 15+ would show the "access data from other apps"
+        // prompt on every launch if the app touched this container. The
+        // widget can't read it without a real signature anyway.
+        nil
     }
 
     /// Load from the shared App Group container.

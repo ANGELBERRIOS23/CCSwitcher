@@ -12,9 +12,9 @@ enum Analytics {
         guard !didTrackLaunch else { return }
         didTrackLaunch = true
 
-        // An absent preference means enabled, matching the Settings toggle.
-        // Check before initializing the SDK so opted-out launches do nothing.
-        let enabled = UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true
+        // Fork build: never count launches of an unofficial build in the
+        // upstream author's statistics, whatever the Settings toggle says.
+        let enabled = false
         guard enabled else { return }
 
         Aptabase.shared.initialize(appKey: "A-US-6303033660")
