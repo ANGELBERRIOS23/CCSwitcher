@@ -13,6 +13,7 @@ struct ClassicMainMenuView: View {
     /// Holds the selected tab and the measured heights, which outlive this
     /// view: the panel unmounts it while hidden.
     let panel: PanelModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     enum Tab: String, CaseIterable {
         case usage, costs, accounts
@@ -30,6 +31,15 @@ struct ClassicMainMenuView: View {
             case .usage: "chart.bar.fill"
             case .costs: "dollarsign.circle.fill"
             case .accounts: "person.2.fill"
+            }
+        }
+
+        /// ⌘1 / ⌘2 / ⌘3, in tab-bar order.
+        var shortcut: KeyEquivalent {
+            switch self {
+            case .usage: "1"
+            case .costs: "2"
+            case .accounts: "3"
             }
         }
     }
@@ -65,7 +75,7 @@ struct ClassicMainMenuView: View {
                 .measureChromeHeight()
         }
         .frame(width: 360, height: popoverHeight)
-        .animation(.easeInOut(duration: 0.2), value: popoverHeight)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: popoverHeight)
         .background(.ultraThinMaterial)
         .onPreferenceChange(UsageContentHeightKey.self) { value in
             if value > 0 { panel.usageContentHeight = value }
@@ -193,26 +203,33 @@ struct ClassicMainMenuView: View {
                     .padding(2)
                     .frame(width: tabWidth)
                     .offset(x: tabWidth * index)
-                    .animation(.easeInOut(duration: 0.15), value: panel.classicSelectedTab)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: panel.classicSelectedTab)
             }
 
             HStack(spacing: 0) {
                 ForEach(Tab.allCases, id: \.self) { tab in
-                    VStack(spacing: 2) {
-                        Image(systemName: tab.iconName)
-                            .font(.system(size: 12))
-                        Text(tab.localizedTitle)
-                            .font(.caption2.weight(.semibold))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
-                    .foregroundStyle(panel.classicSelectedTab == tab ? .white : .textSecondary)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.easeInOut(duration: 0.15)) {
+                    // A plain button rather than a tap gesture, so ⌘1/⌘2/⌘3
+                    // can reach it; it looks the same.
+                    Button {
+                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
                             panel.classicSelectedTab = tab
                         }
+                    } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: tab.iconName)
+                                .font(.system(size: 12))
+                            Text(tab.localizedTitle)
+                                .font(.caption2.weight(.semibold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .foregroundStyle(panel.classicSelectedTab == tab ? .white : .textSecondary)
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .focusable(false)
+                    .keyboardShortcut(tab.shortcut, modifiers: .command)
+                    .accessibilityAddTraits(panel.classicSelectedTab == tab ? .isSelected : [])
                 }
             }
         }
@@ -232,7 +249,17 @@ struct ClassicMainMenuView: View {
                 Text(error)
                     .font(.caption2)
                     .foregroundStyle(.textSecondary)
-                    .lineLimit(1)
+                    .lineLimit(3)
+                    .help(error)
+            } else if let info = appState.infoMessage {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .font(.caption)
+                Text(info)
+                    .font(.caption2)
+                    .foregroundStyle(.textSecondary)
+                    .lineLimit(3)
+                    .help(info)
             }
 
             Spacer()
@@ -245,7 +272,9 @@ struct ClassicMainMenuView: View {
             }
             .buttonStyle(.plain)
             .focusable(false)
+            .keyboardShortcut("r", modifiers: .command)
             .help("Refresh")
+            .accessibilityLabel("Refresh")
 
             Button {
                 NSApp.activate(ignoringOtherApps: true)
@@ -256,7 +285,9 @@ struct ClassicMainMenuView: View {
             }
             .buttonStyle(.plain)
             .focusable(false)
+            .keyboardShortcut(",", modifiers: .command)
             .help("Settings")
+            .accessibilityLabel("Settings")
 
             Button {
                 NSApplication.shared.terminate(nil)
@@ -267,6 +298,7 @@ struct ClassicMainMenuView: View {
             .buttonStyle(.plain)
             .focusable(false)
             .help("Quit")
+            .accessibilityLabel("Quit")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)

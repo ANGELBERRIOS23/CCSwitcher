@@ -235,3 +235,7 @@
 /* Account switch safety */
 "Could not save %@'s current sign-in, so the switch was stopped before changing anything. Try again." = "Could not save %@'s current sign-in, so the switch was stopped before changing anything. Try again.";
 "Claude CLI did not respond in time." = "Claude CLI did not respond in time.";
+
+/* Accessibility and small UX fixes */
+"Remove" = "Remove";
+"Save" = "Save";

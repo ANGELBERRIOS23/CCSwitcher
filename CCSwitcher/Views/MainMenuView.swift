@@ -73,6 +73,7 @@ struct MainMenuView: View {
     /// Holds the selected tab and the measured heights, which outlive this
     /// view: the panel unmounts it while hidden.
     let panel: PanelModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     enum Tab: String, CaseIterable {
         case usage, costs, accounts
@@ -90,6 +91,15 @@ struct MainMenuView: View {
             case .usage: "chart.bar.fill"
             case .costs: "dollarsign.circle.fill"
             case .accounts: "person.2.fill"
+            }
+        }
+
+        /// ⌘1 / ⌘2 / ⌘3, in tab-bar order.
+        var shortcut: KeyEquivalent {
+            switch self {
+            case .usage: "1"
+            case .costs: "2"
+            case .accounts: "3"
             }
         }
     }
@@ -139,7 +149,7 @@ struct MainMenuView: View {
                 .enter(3)
         }
         .frame(width: 360, height: popoverHeight)
-        .animation(Theme.spring, value: popoverHeight)
+        .animation(reduceMotion ? nil : Theme.spring, value: popoverHeight)
         .foregroundStyle(Theme.text)
         .fontDesign(panelStyle == .claude ? .default : .rounded)
         .background(
@@ -285,10 +295,10 @@ struct MainMenuView: View {
 
             Spacer(minLength: 8)
 
-            CircleIconButton(icon: "arrow.clockwise", size: 32, busy: appState.isLoading) {
+            CircleIconButton(icon: "arrow.clockwise", label: "Refresh", size: 32, busy: appState.isLoading) {
                 Task { await appState.refresh() }
             }
-            .help("Refresh")
+            .keyboardShortcut("r", modifiers: .command)
         }
         .padding(.horizontal, Theme.pad)
         .padding(.top, 14)
@@ -312,8 +322,9 @@ struct MainMenuView: View {
                     selected: panel.selectedTab == tab,
                     namespace: tabIndicator
                 ) {
-                    withAnimation(Theme.spring) { panel.selectedTab = tab }
+                    withAnimation(reduceMotion ? nil : Theme.spring) { panel.selectedTab = tab }
                 }
+                .keyboardShortcut(tab.shortcut, modifiers: .command)
             }
         }
         .padding(3)
@@ -349,7 +360,17 @@ struct MainMenuView: View {
                 Text(error)
                     .font(.caption2)
                     .foregroundStyle(Theme.dim)
-                    .lineLimit(1)
+                    .lineLimit(3)
+                    .help(error)
+            } else if let info = appState.infoMessage {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(Theme.success)
+                    .font(.caption)
+                Text(info)
+                    .font(.caption2)
+                    .foregroundStyle(Theme.dim)
+                    .lineLimit(3)
+                    .help(info)
             } else if let lastRefresh = appState.lastUsageRefresh {
                 Image(systemName: "clock")
                     .font(.caption2)
@@ -361,19 +382,18 @@ struct MainMenuView: View {
 
             Spacer()
 
-            CircleIconButton(icon: "gearshape", size: 26) {
+            CircleIconButton(icon: "gearshape", label: "Settings", size: 26) {
                 NSApp.activate(ignoringOtherApps: true)
                 NotificationCenter.default.post(
                     name: .ccswitcherOpenSettings,
                     object: nil
                 )
             }
-            .help("Settings")
+            .keyboardShortcut(",", modifiers: .command)
 
-            CircleIconButton(icon: "power", size: 26) {
+            CircleIconButton(icon: "power", label: "Quit", size: 26) {
                 NSApplication.shared.terminate(nil)
             }
-            .help("Quit")
         }
         .padding(.horizontal, Theme.pad)
         .padding(.vertical, 10)
@@ -423,6 +443,7 @@ private struct TabButton: View {
         }
         .buttonStyle(PressStyle())
         .focusable(false)
+        .accessibilityAddTraits(selected ? .isSelected : [])
         .onHover { hover = $0 }
         .animation(.easeOut(duration: 0.15), value: hover)
     }
