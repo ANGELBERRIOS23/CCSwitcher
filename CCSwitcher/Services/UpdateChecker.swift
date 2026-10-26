@@ -41,7 +41,9 @@ final class UpdateChecker: ObservableObject {
         // checks at the interval configured by Sparkle (default: 1 day).
         // No delegates needed: standard UI behavior is what we want.
         let ctrl = SPUStandardUpdaterController(
-            startingUpdater: true,
+            // Fork builds have no SUFeedURL; starting Sparkle there would only
+            // show an updater error alert.
+            startingUpdater: Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil,
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
