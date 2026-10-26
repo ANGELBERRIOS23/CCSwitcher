@@ -9,6 +9,8 @@ struct AccountSwitcherView: View {
     @State private var editingAccountId: UUID?
     @State private var editingLabel = ""
     @State private var copiedLoginURL = false
+    /// Bumped per copy, so only the latest copy's timer clears "Copied!".
+    @State private var copyGeneration = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -100,9 +102,11 @@ struct AccountSwitcherView: View {
                             NSPasteboard.general.clearContents()
                             NSPasteboard.general.setString(authURL.absoluteString, forType: .string)
                             copiedLoginURL = true
+                            copyGeneration += 1
+                            let generation = copyGeneration
                             Task {
                                 try? await Task.sleep(for: .seconds(2))
-                                copiedLoginURL = false
+                                if copyGeneration == generation { copiedLoginURL = false }
                             }
                         } label: {
                             Label(

@@ -72,8 +72,10 @@ struct PopoverRoot: View {
     }
 
     var body: some View {
-        // On macOS 26 the 1.x system popover had no arrow, so Classic has none.
-        let arrow = style == .classic ? 0 : PanelMetrics.arrow
+        // On macOS 26 the 1.x system popover had no arrow, so Classic has none
+        // there; on earlier systems it did, so Classic keeps it.
+        let arrow = style == .classic && ProcessInfo.processInfo.isOperatingSystemAtLeast(
+            OperatingSystemVersion(majorVersion: 26, minorVersion: 0, patchVersion: 0)) ? 0 : PanelMetrics.arrow
         let shape = PopoverShape(arrowX: model.arrowX - PanelMetrics.margin, arrowHeight: arrow)
         VStack(spacing: 0) {
             Color.clear.frame(height: arrow)
@@ -113,7 +115,8 @@ struct PopoverRoot: View {
         .clipShape(shape)
         // The system popover casts a shadow; Classic does too. It goes after
         // the clip, which would otherwise cut it off.
-        .shadow(color: .black.opacity(style == .classic ? 0.25 : 0), radius: 12, y: 4)
+        .shadow(color: .black.opacity(style == .classic ? 0.25 : 0),
+                radius: style == .classic ? 12 : 0, y: style == .classic ? 4 : 0)
         .padding(PanelMetrics.margin)
         // Classic appears and disappears at once, like the 1.x popover
         // (`NSPopover.animates = false`); the others scale in from the arrow.
@@ -237,6 +240,13 @@ final class PopoverController {
         guard model.shown else { return }
         closedByStatusItemPressAt = isPressingStatusItem() ? Date() : nil
         model.shown = false
+        // Classic has no fade-out to wait for; leaving the now-invisible panel
+        // up for 180 ms would swallow clicks meant for the window behind it.
+        let style = UserDefaults.standard.string(forKey: "panelStyle").flatMap(PanelStyle.init(rawValue:)) ?? .default
+        if style == .classic {
+            panel.orderOut(nil)
+            return
+        }
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(180))
             guard let self, !self.model.shown else { return }

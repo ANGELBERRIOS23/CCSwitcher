@@ -9,6 +9,8 @@ struct ClassicAccountSwitcherView: View {
     @State private var editingAccountId: UUID?
     @State private var editingLabel = ""
     @State private var copiedLoginURL = false
+    /// Bumped per copy, so only the latest copy's timer clears "Copied!".
+    @State private var copyGeneration = 0
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -134,6 +136,7 @@ struct ClassicAccountSwitcherView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
                 .tint(Classic.brand)
+                .fixedSize()
             }
 
             Button {
@@ -196,9 +199,11 @@ struct ClassicAccountSwitcherView: View {
                             NSPasteboard.general.clearContents()
                             NSPasteboard.general.setString(authURL.absoluteString, forType: .string)
                             copiedLoginURL = true
+                            copyGeneration += 1
+                            let generation = copyGeneration
                             Task {
                                 try? await Task.sleep(for: .seconds(2))
-                                copiedLoginURL = false
+                                if copyGeneration == generation { copiedLoginURL = false }
                             }
                         } label: {
                             Label(
