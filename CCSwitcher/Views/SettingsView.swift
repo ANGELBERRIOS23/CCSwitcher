@@ -8,7 +8,7 @@ struct SettingsView: View {
     @EnvironmentObject private var menuBarConfig: MenuBarConfig
     @AppStorage("refreshInterval") private var refreshInterval: Double = 300
     @AppStorage("showFullEmail") private var showFullEmail = false
-    @AppStorage("panelStyle") private var panelStyle: PanelStyle = .warm
+    @AppStorage("panelStyle") private var panelStyle: PanelStyle = .default
     @AppStorage("showInDock") private var showInDock = false
     @AppStorage("appLanguage") private var appLanguage = "auto"
     @AppStorage(Analytics.enabledKey) private var analyticsEnabled = true

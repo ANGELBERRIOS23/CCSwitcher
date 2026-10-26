@@ -62,7 +62,7 @@ struct PopoverRoot: View {
     @ObservedObject var config: MenuBarConfig
     var model: PanelModel
     var locale: Locale
-    @AppStorage("panelStyle") private var style: PanelStyle = .warm
+    @AppStorage("panelStyle") private var style: PanelStyle = .default
 
     /// Active account's session utilization (0…1), used to warm the bloom.
     private var load: Double {
@@ -72,20 +72,28 @@ struct PopoverRoot: View {
     }
 
     var body: some View {
-        let shape = PopoverShape(arrowX: model.arrowX - PanelMetrics.margin, arrowHeight: PanelMetrics.arrow)
+        // On macOS 26 the 1.x system popover had no arrow, so Classic has none.
+        let arrow = style == .classic ? 0 : PanelMetrics.arrow
+        let shape = PopoverShape(arrowX: model.arrowX - PanelMetrics.margin, arrowHeight: arrow)
         VStack(spacing: 0) {
-            Color.clear.frame(height: PanelMetrics.arrow)
-            MainMenuView()
-                .environmentObject(appState)
-                .environmentObject(config)
-                .environment(\.locale, locale)
-                .environment(\.panelStyle, style)
-                .environment(\.panelShown, model.shown)
-                .frame(width: PanelMetrics.width)
-                .fixedSize(horizontal: false, vertical: true)
+            Color.clear.frame(height: arrow)
+            Group {
+                if style == .classic {
+                    ClassicMainMenuView()
+                } else {
+                    MainMenuView()
+                }
+            }
+            .environmentObject(appState)
+            .environmentObject(config)
+            .environment(\.locale, locale)
+            .environment(\.panelStyle, style)
+            .environment(\.panelShown, model.shown)
+            .frame(width: PanelMetrics.width)
+            .fixedSize(horizontal: false, vertical: true)
         }
         .background {
-            if style == .translucent {
+            if style == .translucent || style == .classic {
                 if #available(macOS 26.0, *) {
                     // Liquid Glass, as the system popover draws itself on
                     // macOS 26+: the desktop shows through.
@@ -103,11 +111,17 @@ struct PopoverRoot: View {
         }
         .overlay(shape.stroke(Theme.hairline, lineWidth: 0.5))
         .clipShape(shape)
+        // The system popover casts a shadow; Classic does too. It goes after
+        // the clip, which would otherwise cut it off.
+        .shadow(color: .black.opacity(style == .classic ? 0.25 : 0), radius: 12, y: 4)
         .padding(PanelMetrics.margin)
-        .scaleEffect(model.shown ? 1 : 0.95,
+        // Classic appears and disappears at once, like the 1.x popover
+        // (`NSPopover.animates = false`); the others scale in from the arrow.
+        .scaleEffect(model.shown || style == .classic ? 1 : 0.95,
                      anchor: UnitPoint(x: model.arrowX / (PanelMetrics.width + PanelMetrics.margin * 2), y: 0))
         .opacity(model.shown ? 1 : 0)
-        .animation(model.shown ? .spring(duration: 0.36, bounce: 0.08) : .easeIn(duration: 0.14),
+        .animation(style == .classic ? nil
+                   : model.shown ? .spring(duration: 0.36, bounce: 0.08) : .easeIn(duration: 0.14),
                    value: model.shown)
     }
 }

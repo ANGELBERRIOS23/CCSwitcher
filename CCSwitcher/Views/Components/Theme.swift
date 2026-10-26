@@ -83,13 +83,21 @@ extension EnvironmentValues {
 
 /// How the popover panel is drawn (Settings > General > Appearance).
 enum PanelStyle: String, CaseIterable, Identifiable {
-    /// Warm ivory / charcoal with the terracotta bloom. The default.
+    // Declaration order is the order of the Settings picker.
+
+    /// The 1.x interface: its own views (`Views/Classic`) on the system
+    /// popover material, with none of the components in this file. The default.
+    case classic
+    /// Warm ivory / charcoal with the terracotta bloom (the 2.0 design).
     case warm
     /// The system popover material: the desktop shows through.
     case translucent
     /// Flat and neutral like claude.ai: solid background, plain cards,
     /// thin blue bars, no glow.
     case claude
+
+    /// Used until the user picks a style in Settings.
+    static let `default`: PanelStyle = .classic
 
     var id: String { rawValue }
 
@@ -98,6 +106,7 @@ enum PanelStyle: String, CaseIterable, Identifiable {
 
     var title: LocalizedStringKey {
         switch self {
+        case .classic: "Classic"
         case .warm: "Warm"
         case .translucent: "Translucent"
         case .claude: "Claude"
@@ -156,7 +165,7 @@ struct Surface: ViewModifier {
                                     lineWidth: 0.5)
                         )
                 )
-        case .warm:
+        case .warm, .classic:
             styledSurface(content)
         }
     }

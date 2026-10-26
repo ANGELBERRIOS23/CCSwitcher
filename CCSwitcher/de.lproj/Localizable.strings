@@ -214,3 +214,8 @@
 "Warm" = "Warm";
 "Translucent" = "Transparent";
 "Claude" = "Claude";
+"Classic" = "Klassisch";
+
+/* Login in progress */
+"Copy Login URL" = "Anmelde-URL kopieren";
+"Copied!" = "Kopiert!";

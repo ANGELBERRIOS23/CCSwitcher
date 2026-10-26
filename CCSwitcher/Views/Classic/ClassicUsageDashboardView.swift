@@ -1,0 +1,386 @@
+import SwiftUI
+
+/// Hover tooltip that works inside the panel (where `.help()` doesn't).
+private struct StatWithTooltip<Content: View>: View {
+    let tooltip: LocalizedStringKey
+    @ViewBuilder let content: Content
+    @State private var isHovering = false
+    @Environment(\.locale) private var locale
+
+    var body: some View {
+        content
+            .onHover { isHovering = $0 }
+            .popover(isPresented: $isHovering, arrowEdge: .bottom) {
+                Text(tooltip)
+                    .font(.caption)
+                    .padding(8)
+                    .frame(width: 200)
+                    .environment(\.locale, locale)
+            }
+    }
+}
+
+/// The 1.x Usage tab: real usage limits from the Claude API, one card per account.
+struct ClassicUsageDashboardView: View {
+    @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var menuBarConfig: MenuBarConfig
+    @AppStorage("showFullEmail") private var showFullEmail = false
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                if appState.accounts.isEmpty && appState.isLoading {
+                    VStack(spacing: 12) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Loading usage data...")
+                            .font(.caption)
+                            .foregroundStyle(.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
+                } else if appState.accounts.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "chart.bar.xaxis")
+                            .font(.system(size: 32))
+                            .foregroundStyle(.textSecondary)
+                        Text("Usage data unavailable")
+                            .font(.subheadline)
+                            .foregroundStyle(.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
+                } else {
+                    todayCostBanner
+                    todayActivityCard
+
+                    ForEach(appState.accounts) { account in
+                        accountUsageCard(account: account, usage: appState.accountUsage[account.id])
+                    }
+                }
+
+                if let lastRefresh = appState.lastUsageRefresh {
+                    HStack(spacing: 4) {
+                        Spacer()
+                        Image(systemName: "arrow.clockwise")
+                            .font(.caption2)
+                        Text(lastRefresh, style: .relative)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.textSecondary)
+                    .padding(.horizontal, 16)
+                }
+            }
+            .padding(.vertical, 12)
+            // Sizes the panel to this tab's content; see MainMenuView.swift.
+            .measureUsageContentHeight()
+        }
+    }
+
+    // MARK: - Today Cost Banner
+
+    private var todayCostBanner: some View {
+        let cost = appState.costSummary.todayCost
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "dollarsign.circle")
+                    .font(.subheadline)
+                    .foregroundStyle(.green)
+                Text("Today's API-Equivalent Cost")
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(1)
+                Spacer()
+            }
+
+            StatWithTooltip(tooltip: Self.costDisclaimer) {
+                Text(Formatted.cost(cost, locale: L10n.locale))
+                    .font(.title.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(.green)
+            }
+        }
+        .cardStyle()
+        .sectionPadding()
+    }
+
+    private static let costDisclaimer: LocalizedStringKey = "Estimated API-equivalent cost of your Claude Code usage, for reference only."
+
+    // MARK: - Today Activity Card
+
+    private var todayActivityCard: some View {
+        let stats = appState.activityStats
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "waveform.path.ecg")
+                    .font(.subheadline)
+                    .foregroundStyle(Classic.brand)
+                Text("Today's Activity")
+                    .font(.subheadline.weight(.medium))
+                Spacer()
+            }
+
+            HStack(spacing: 0) {
+                activityStat(icon: "bubble.left.and.bubble.right", value: "\(stats.conversationTurns)", label: "Turns",
+                             tooltip: "Messages you sent to Claude Code today")
+                activityStat(icon: "clock", value: stats.activeCodingTimeString, label: "Active time",
+                             tooltip: "Estimated total time Claude worked for you today. Parallel sessions stack. Idle gaps >10 min excluded. This is an approximation based on message timestamps, not exact.")
+                activityStat(icon: "doc.text", value: "\(stats.linesWritten)", label: "Lines",
+                             tooltip: "Estimated lines of code written by Claude via Edit/Write tools")
+            }
+
+            HStack(spacing: 0) {
+                modelStat(name: "Fable", count: stats.modelUsage["Fable"] ?? 0,
+                          tooltip: "Claude Fable 5 — most powerful model, the new flagship tier")
+                modelStat(name: "Opus", count: stats.modelUsage["Opus"] ?? 0,
+                          tooltip: "Claude Opus 4 — most capable model, best for complex tasks")
+                modelStat(name: "Sonnet", count: stats.modelUsage["Sonnet"] ?? 0,
+                          tooltip: "Claude Sonnet 4 — balanced speed and capability")
+                modelStat(name: "Haiku", count: stats.modelUsage["Haiku"] ?? 0,
+                          tooltip: "Claude Haiku 4 — fastest model, best for simple tasks")
+            }
+        }
+        .cardStyle()
+        .sectionPadding()
+    }
+
+    private func activityStat(icon: String, value: String, label: LocalizedStringKey, tooltip: LocalizedStringKey) -> some View {
+        StatWithTooltip(tooltip: tooltip) {
+            VStack(spacing: 3) {
+                Text(value)
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                HStack(spacing: 3) {
+                    Image(systemName: icon)
+                        .font(.caption2)
+                        .foregroundStyle(.textSecondary)
+                    Text(label)
+                        .font(.caption2)
+                        .foregroundStyle(.textSecondary)
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func modelStat(name: String, count: Int, tooltip: LocalizedStringKey) -> some View {
+        StatWithTooltip(tooltip: tooltip) {
+            VStack(spacing: 3) {
+                Text("\(count)")
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(count > 0 ? .primary : .quaternary)
+                HStack(spacing: 3) {
+                    Circle()
+                        .fill(modelColor(name))
+                        .frame(width: 7, height: 7)
+                    Text(name)
+                        .font(.caption2)
+                        .foregroundStyle(count > 0 ? .tertiary : .quaternary)
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func modelColor(_ name: String) -> Color {
+        switch name {
+        case "Fable": return .purple
+        case "Opus": return Classic.brand
+        case "Sonnet": return .blue
+        case "Haiku": return .green
+        default: return .gray
+        }
+    }
+
+    // MARK: - Per-Account Card
+
+    private func accountUsageCard(account: Account, usage: UsageAPIResponse?) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            accountHeader(account)
+            if let usage = usage {
+                usageBars(usage)
+                extraUsageRow(usage.extraUsage)
+                sampleAgeLabel(account)
+            } else if let errorState = appState.accountUsageErrors[account.id] {
+                HStack {
+                    Image(systemName: errorState.isRateLimited ? "timer" : (errorState.isExpired ? "exclamationmark.triangle" : "xmark.circle"))
+                        .foregroundStyle(errorState.isExpired ? .yellow : .red)
+                    Text(errorState.message)
+                        .font(.caption)
+                        .foregroundStyle(.textSecondary)
+                        .lineLimit(2)
+                    Spacer()
+                }
+                .padding(.top, 4)
+            } else {
+                // No sample yet: accounts are polled round-robin, so this is
+                // a waiting state, not an error.
+                HStack {
+                    Image(systemName: "hourglass")
+                        .foregroundStyle(.secondary)
+                    Text("Waiting for usage data...")
+                        .font(.caption)
+                        .foregroundStyle(.textSecondary)
+                    Spacer()
+                }
+                .padding(.top, 4)
+            }
+        }
+        .cardStyle()
+        .sectionPadding()
+    }
+
+    /// Accounts are polled round-robin, so a card's numbers can be several
+    /// cycles old. Say so once the sample is 90 s old.
+    @ViewBuilder
+    private func sampleAgeLabel(_ account: Account) -> some View {
+        if let sampledAt = appState.accountUsageSampledAt[account.id],
+           Date().timeIntervalSince(sampledAt) >= 90 {
+            HStack(spacing: 3) {
+                Image(systemName: "clock")
+                    .font(.caption2)
+                Text("Updated \(Text(sampledAt, style: .relative)) ago")
+                    .font(.caption2)
+            }
+            .foregroundStyle(.textSecondary)
+        }
+    }
+
+    @ViewBuilder
+    private func accountHeader(_ account: Account) -> some View {
+        let name = account.effectiveDisplayName(obfuscated: !showFullEmail)
+        let email = account.displayEmail(obfuscated: !showFullEmail)
+
+        HStack(spacing: 8) {
+            Image(systemName: account.provider.iconName)
+                .font(.subheadline)
+                .foregroundStyle(account.isActive ? Classic.brand : .secondary)
+
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    // 1.x showed only the email. With several organizations
+                    // under one email the name tells them apart, so show the
+                    // name and put the email under it when they differ.
+                    Text(name)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
+
+                    if account.isActive {
+                        ClassicBadge(text: String(localized: "Active", bundle: L10n.bundle), color: .green)
+                    }
+                }
+
+                if name != email {
+                    Text(email)
+                        .font(.caption2)
+                        .foregroundStyle(.textSecondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer()
+
+            if let sub = account.displaySubscriptionType {
+                ClassicBadge(text: sub, color: Classic.brand)
+            }
+
+            if !account.isActive {
+                Button("Switch") { Task { await appState.switchTo(account) } }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .tint(Classic.brand)
+                    .focusable(false)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func usageBars(_ usage: UsageAPIResponse) -> some View {
+        if let session = usage.fiveHour {
+            usageRow(
+                label: Text("Session"),
+                resetText: session.resetTimeString,
+                utilization: session.utilization ?? 0,
+                kind: .session
+            )
+        }
+        if let weekly = usage.sevenDay {
+            usageRow(
+                label: Text("Weekly"),
+                resetText: weekly.resetTimeString,
+                utilization: weekly.utilization ?? 0,
+                kind: .weekly
+            )
+        }
+        // The weekly limit scoped to one model. The server names the model,
+        // so the label is verbatim rather than a localized key.
+        if let scoped = usage.modelScopedWeekly {
+            usageRow(
+                label: Text(verbatim: scoped.modelName),
+                resetText: scoped.window.resetTimeString,
+                utilization: scoped.window.utilization ?? 0,
+                kind: .modelWeekly
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func extraUsageRow(_ extra: ExtraUsage?) -> some View {
+        if let extra {
+            let enabled = extra.isEnabled == true
+            let color: Color = enabled ? .orange : .gray
+            HStack(spacing: 6) {
+                Image(systemName: enabled ? "bolt.fill" : "bolt.slash")
+                    .font(.caption)
+                    .foregroundStyle(color)
+                Text("Extra usage")
+                    .font(.caption)
+                    .foregroundStyle(.textSecondary)
+                Spacer()
+                Text(LocalizedStringKey(enabled ? "On" : "Off"))
+                    .font(.caption)
+                    .foregroundStyle(color)
+            }
+        }
+    }
+
+    // MARK: - Usage Row
+
+    private func usageRow(label: Text, resetText: String?, utilization: Double, kind: LimitBarKind) -> some View {
+        let fillColor = menuBarConfig.limitBarColor(for: kind, utilization: utilization, context: .classicDashboard)
+
+        return VStack(spacing: 5) {
+            HStack {
+                label
+                    .font(.caption)
+                    .foregroundStyle(.textSecondary)
+                    .lineLimit(1)
+                Spacer()
+                if let resetText {
+                    Text("Resets in \(resetText)")
+                        .font(.caption)
+                        .foregroundStyle(.textSecondary)
+                }
+            }
+
+            HStack(spacing: 8) {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(.progressTrack)
+                            .frame(height: 7)
+
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(fillColor)
+                            .frame(width: max(0, geo.size.width * min(utilization / 100.0, 1.0)), height: 7)
+                    }
+                }
+                .frame(height: 7)
+
+                Text(Formatted.percent(utilization, locale: L10n.locale))
+                    .font(.caption.weight(.medium).monospacedDigit())
+                    .foregroundStyle(fillColor)
+                    .lineLimit(1)
+                    // minWidth, not width: "100 %" in some locales is wider than 1.x's "100%".
+                    .frame(minWidth: 34, alignment: .trailing)
+            }
+        }
+    }
+}

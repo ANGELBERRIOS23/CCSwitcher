@@ -214,3 +214,8 @@
 "Warm" = "暖色";
 "Translucent" = "半透明";
 "Claude" = "Claude";
+"Classic" = "经典";
+
+/* Login in progress */
+"Copy Login URL" = "复制登录链接";
+"Copied!" = "已复制";

@@ -214,3 +214,8 @@
 "Warm" = "ウォーム";
 "Translucent" = "半透明";
 "Claude" = "Claude";
+"Classic" = "クラシック";
+
+/* Login in progress */
+"Copy Login URL" = "ログイン URL をコピー";
+"Copied!" = "コピーしました";

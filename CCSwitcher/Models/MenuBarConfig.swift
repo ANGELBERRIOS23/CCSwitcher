@@ -16,6 +16,8 @@ enum LimitBarKind {
 enum LimitBarContext {
     case menuBar
     case dashboard
+    /// The Classic panel style, which keeps the 1.x dashboard palette.
+    case classicDashboard
 }
 
 /// Shared, reactive source of truth for the menu-bar module list.
@@ -209,6 +211,12 @@ final class MenuBarConfig: ObservableObject {
             if pct >= 90 { return Theme.danger }
             if pct >= 60 { return Theme.warning }
             return .brand
+        case .classicDashboard:
+            // The 1.x palette: green, orange from 60 %, red from 90 %.
+            let pct = utilization ?? 0
+            if pct >= 90 { return .red }
+            if pct >= 60 { return .orange }
+            return .green
         }
     }
 

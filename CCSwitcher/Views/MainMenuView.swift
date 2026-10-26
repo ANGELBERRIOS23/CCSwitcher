@@ -345,7 +345,7 @@ struct MainMenuView: View {
                 Capsule()
                     .fill(Theme.glassWell)
                     .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 0.5))
-            case .warm:
+            case .warm, .classic:  // Classic never shows this view.
                 Capsule()
                     .fill(Theme.well)
                     .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 0.5))
