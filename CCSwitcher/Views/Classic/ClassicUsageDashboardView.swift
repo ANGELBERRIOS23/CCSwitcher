@@ -1,16 +1,22 @@
 import SwiftUI
 
-/// Hover tooltip for stats. 1.x used a nested SwiftUI popover here; inside
-/// the floating panel that would steal key status and close the panel, so
-/// this uses the native `.help` tag, as the 2.0 views do.
+/// Hover tooltip, as 1.x drew it: a small SwiftUI popover that opens on hover.
 private struct StatWithTooltip<Content: View>: View {
     let tooltip: LocalizedStringKey
     @ViewBuilder let content: Content
+    @State private var isHovering = false
+    @Environment(\.locale) private var locale
 
     var body: some View {
         content
-            .contentShape(Rectangle())
-            .help(tooltip)
+            .onHover { isHovering = $0 }
+            .popover(isPresented: $isHovering, arrowEdge: .bottom) {
+                Text(tooltip)
+                    .font(.caption)
+                    .padding(8)
+                    .frame(width: 200)
+                    .environment(\.locale, locale)
+            }
     }
 }
 
