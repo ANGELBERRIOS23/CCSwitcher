@@ -1427,9 +1427,9 @@ final class AppState: ObservableObject {
         var changed = false
         for (id, usage) in accountUsage {
             if book.record(usage, for: id) { changed = true }
-            if usage.lacksWeeklyLimit, loggedWeeklyShape.insert(id).inserted {
+            if book.estimatesWeekly(usage, for: id), loggedWeeklyShape.insert(id).inserted {
                 let kinds = (usage.limits ?? []).map { "\($0.kind ?? "?")(\($0.resetsAt == nil ? "no reset" : "reset"))" }
-                log.info("[weeklyEstimate] \(id.uuidString.prefix(8)): no weekly percentage; seven_day=\(usage.sevenDay == nil ? "null" : "no utilization"), limits=\(kinds)")
+                log.info("[weeklyEstimate] \(id.uuidString.prefix(8)): estimated; weekly=\(usage.weeklyPercent.map { "\($0)%" } ?? "null"), seven_day reset=\(usage.sevenDay?.resetsAt == nil ? "no" : "yes"), limits=\(kinds)")
             }
         }
         guard changed else { return }
@@ -1437,10 +1437,10 @@ final class AppState: ObservableObject {
         book.save()
     }
 
-    /// The estimated weekly bar for an account whose usage has no weekly
+    /// The estimated weekly bar for an account without a real weekly
     /// percentage; nil for every other account.
     func weeklyEstimate(for account: Account) -> WeeklyEstimate.Result? {
-        guard let usage = accountUsage[account.id], usage.lacksWeeklyLimit else { return nil }
+        guard let usage = accountUsage[account.id], weeklyEstimates.estimatesWeekly(usage, for: account.id) else { return nil }
         return weeklyEstimates.estimate(for: account.id, usage: usage)
     }
 
