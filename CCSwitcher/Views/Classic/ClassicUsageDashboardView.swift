@@ -334,16 +334,15 @@ struct ClassicUsageDashboardView: View {
                 kind: .session
             )
         }
-        if let weekly = usage.sevenDay, !usage.lacksWeeklyLimit {
+        if let estimate = appState.weeklyEstimate(for: account) {
+            estimatedWeeklyRow(estimate, account: account)
+        } else if let weekly = usage.sevenDay {
             usageRow(
                 label: Text("Weekly"),
                 resetText: weekly.resetTimeString,
                 utilization: weekly.utilization ?? 0,
                 kind: .weekly
             )
-        }
-        if let estimate = appState.weeklyEstimate(for: account) {
-            estimatedWeeklyRow(estimate, account: account)
         }
         // The weekly limit scoped to one model. The server names the model,
         // so the label is verbatim rather than a localized key.

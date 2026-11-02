@@ -5,11 +5,14 @@ import Foundation
 // bar estimated from the 5-hour sessions the app has seen.
 
 extension UsageAPIResponse {
+    /// The weekly percentage, from `seven_day` or the `limits` list.
+    var weeklyPercent: Double? {
+        sevenDay?.utilization ?? (limits ?? []).first { $0.kind == "weekly_all" && $0.percent != nil }?.percent
+    }
+
     /// True when the server reports a 5-hour session but no weekly percentage.
     var lacksWeeklyLimit: Bool {
-        fiveHour?.utilization != nil
-            && sevenDay?.utilization == nil
-            && !(limits ?? []).contains { $0.kind == "weekly_all" && $0.percent != nil }
+        fiveHour?.utilization != nil && weeklyPercent == nil
     }
 
     /// The weekly reset the server reports, with or without a percentage.
@@ -70,6 +73,22 @@ struct WeeklyEstimateBook: Codable, Equatable {
         /// Weekday (1 = Sunday … 7 = Saturday) and hour the user picked.
         var chosenWeekday: Int?
         var chosenHour: Int?
+        /// The server once sent this account no weekly percentage, and has
+        /// not sent one above 0% since.
+        var reportedNoWeekly: Bool?
+    }
+
+    /// Whether an account's weekly bar is estimated: the server sends no
+    /// weekly percentage, or it once sent none and now says a flat 0% (an
+    /// account went from one to the other at its weekly reset). The first
+    /// percentage above 0 means the limit is real and ends it.
+    static func estimates(_ usage: UsageAPIResponse, entry: Entry?) -> Bool {
+        if usage.lacksWeeklyLimit { return true }
+        return usage.fiveHour?.utilization != nil && usage.weeklyPercent == 0 && entry?.reportedNoWeekly == true
+    }
+
+    func estimatesWeekly(_ usage: UsageAPIResponse, for account: UUID) -> Bool {
+        Self.estimates(usage, entry: entries[account.uuidString])
     }
 
     /// Keyed by account UUID string.
@@ -85,7 +104,12 @@ struct WeeklyEstimateBook: Codable, Equatable {
            abs((entry.lastServerWeeklyReset ?? .distantPast).timeIntervalSince(reset)) > 60 {
             entry.lastServerWeeklyReset = reset
         }
-        if usage.lacksWeeklyLimit,
+        if usage.lacksWeeklyLimit {
+            entry.reportedNoWeekly = true
+        } else if (usage.weeklyPercent ?? 0) > 0 {
+            entry.reportedNoWeekly = nil
+        }
+        if Self.estimates(usage, entry: entry),
            let utilization = usage.fiveHour?.utilization, utilization > 0,
            let reset = usage.fiveHour?.resetsAtDate {
             let seconds = Int(reset.timeIntervalSince1970.rounded())

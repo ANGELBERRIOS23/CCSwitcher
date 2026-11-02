@@ -47,6 +47,27 @@ final class WeeklyEstimateTests: XCTestCase {
         XCTAssertFalse(try usage().lacksWeeklyLimit)
     }
 
+    func testFlatZeroAfterNoPercentageStaysEstimated() throws {
+        var book = WeeklyEstimateBook()
+        // A real limit at 0%: not estimated.
+        let zero = try usage(session: 30, weekly: 0, weeklyResetsIn: 7 * day)
+        book.record(zero, for: account, now: now)
+        XCTAssertFalse(book.estimatesWeekly(zero, for: account))
+
+        // No percentage at all, then a flat 0% after the weekly reset: estimated,
+        // and the session in progress counts.
+        book.record(try usage(session: 27, weeklyResetsIn: -1), for: account, now: now)
+        book.record(zero, for: account, now: now)
+        XCTAssertTrue(book.estimatesWeekly(zero, for: account))
+        XCTAssertEqual(book.estimate(for: account, usage: zero, now: now, calendar: calendar).percent, 3.9, accuracy: 0.001)
+
+        // The first percentage above 0 means the limit is real.
+        let real = try usage(session: 40, weekly: 2, weeklyResetsIn: 7 * day)
+        book.record(real, for: account, now: now)
+        XCTAssertFalse(book.estimatesWeekly(real, for: account))
+        XCTAssertFalse(book.estimatesWeekly(zero, for: account))
+    }
+
     func testRecordKeepsEachSessionsPeak() throws {
         var book = WeeklyEstimateBook()
         XCTAssertTrue(book.record(try usage(session: 30), for: account, now: now))
