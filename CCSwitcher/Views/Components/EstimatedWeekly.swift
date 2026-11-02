@@ -12,13 +12,33 @@ extension Theme {
 extension WeeklyEstimate.Result {
     /// "≈ 3.8%", so it never reads like a real percentage. One decimal: a
     /// whole 5-hour session moves it only 13 points.
-    var percentText: String {
+    var percentText: String { Self.approximate(percent) }
+
+    static func approximate(_ percent: Double) -> String {
         "≈ " + (percent / 100).formatted(.percent.precision(.fractionLength(0...1)).locale(L10n.locale))
     }
 
     /// Same countdown wording as the other rows ("Thu 3:00 PM", "5 hr 3 min").
     var resetText: String? {
         UsageWindow(utilization: nil, resetsAt: ISO8601DateFormatter().string(from: week.end)).resetTimeString
+    }
+}
+
+/// The line under the estimated bar: how many 5-hour sessions the week holds
+/// and what the one in progress adds. Callers set font and color.
+struct EstimatedWeeklyDetail: View {
+    let estimate: WeeklyEstimate.Result
+
+    var body: some View {
+        Group {
+            if let current = estimate.currentSessionPercent {
+                Text("5-hour sessions this week: \(estimate.sessions) · current adds \(WeeklyEstimate.Result.approximate(current))")
+            } else {
+                Text("5-hour sessions this week: \(estimate.sessions)")
+            }
+        }
+        .lineLimit(1)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
