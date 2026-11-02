@@ -69,7 +69,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: me.xueshi.ccswitcher
         CODE_SIGN_ENTITLEMENTS: CCSwitcher/Resources/CCSwitcher.entitlements
         PRODUCT_NAME: CCSwitcher
-        MARKETING_VERSION: "2.1.0-propia"
+        MARKETING_VERSION: "2.1.0-propia2"
         CURRENT_PROJECT_VERSION: "68"
         COMBINE_HIDPI_IMAGES: true
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -127,7 +127,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: me.xueshi.ccswitcher.widget
         CODE_SIGN_ENTITLEMENTS: CCSwitcherWidget/Resources/CCSwitcherWidget.entitlements
         PRODUCT_NAME: CCSwitcherWidgetExtension
-        MARKETING_VERSION: "2.1.0-propia"
+        MARKETING_VERSION: "2.1.0-propia2"
         CURRENT_PROJECT_VERSION: "68"
         SWIFT_VERSION: "6.0"
         MACOSX_DEPLOYMENT_TARGET: "14.0"
@@ -163,6 +163,7 @@ targets:
       - path: CCSwitcher/Services/KeychainService.swift
       - path: CCSwitcher/Models/Account.swift
       - path: CCSwitcher/Models/UsageData.swift
+      - path: CCSwitcher/Models/WeeklyEstimate.swift
       - path: CCSwitcher/Models/String+Obfuscation.swift
     dependencies:
       - package: GRDB

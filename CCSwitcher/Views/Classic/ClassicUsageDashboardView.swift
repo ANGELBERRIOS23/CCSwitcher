@@ -202,7 +202,7 @@ struct ClassicUsageDashboardView: View {
         VStack(alignment: .leading, spacing: 10) {
             accountHeader(account)
             if let usage = usage {
-                usageBars(usage)
+                usageBars(usage, account: account)
                 extraUsageRow(usage.extraUsage)
                 sampleAgeLabel(account)
             } else if let errorState = appState.accountUsageErrors[account.id] {
@@ -300,7 +300,7 @@ struct ClassicUsageDashboardView: View {
     }
 
     @ViewBuilder
-    private func usageBars(_ usage: UsageAPIResponse) -> some View {
+    private func usageBars(_ usage: UsageAPIResponse, account: Account) -> some View {
         if let session = usage.fiveHour {
             usageRow(
                 label: Text("Session"),
@@ -309,13 +309,16 @@ struct ClassicUsageDashboardView: View {
                 kind: .session
             )
         }
-        if let weekly = usage.sevenDay {
+        if let weekly = usage.sevenDay, !usage.lacksWeeklyLimit {
             usageRow(
                 label: Text("Weekly"),
                 resetText: weekly.resetTimeString,
                 utilization: weekly.utilization ?? 0,
                 kind: .weekly
             )
+        }
+        if let estimate = appState.weeklyEstimate(for: account) {
+            estimatedWeeklyRow(estimate, account: account)
         }
         // The weekly limit scoped to one model. The server names the model,
         // so the label is verbatim rather than a localized key.
@@ -390,5 +393,55 @@ struct ClassicUsageDashboardView: View {
                     .frame(minWidth: 34, alignment: .trailing)
             }
         }
+    }
+
+    /// Fork-only: the estimated weekly bar of an account whose usage has no
+    /// weekly percentage, with a line for how much of the week has gone by.
+    private func estimatedWeeklyRow(_ estimate: WeeklyEstimate.Result, account: Account) -> some View {
+        let color = estimate.percent >= 90 ? Color.red : Theme.estimated
+
+        return VStack(spacing: 5) {
+            HStack {
+                Text("Weekly (estimated)")
+                    .font(.caption)
+                    .foregroundStyle(Theme.estimated)
+                    .lineLimit(1)
+                Spacer()
+                if let resetText = estimate.resetText {
+                    Text("Resets in \(resetText)")
+                        .font(.caption)
+                        .foregroundStyle(.textSecondary)
+                }
+                WeeklyResetMenu(account: account, week: estimate.week)
+            }
+
+            HStack(spacing: 8) {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(.progressTrack)
+                            .frame(height: 7)
+
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(color)
+                            .frame(width: max(0, geo.size.width * min(estimate.percent / 100.0, 1.0)), height: 7)
+
+                        Capsule()
+                            .fill(Color.primary.opacity(0.55))
+                            .frame(width: 2, height: 11)
+                            .offset(x: geo.size.width * estimate.elapsedPercent / 100 - 1)
+                    }
+                }
+                .frame(height: 7)
+
+                Text(estimate.percentText)
+                    .font(.caption.weight(.medium).monospacedDigit())
+                    .foregroundStyle(color)
+                    .lineLimit(1)
+                    .frame(minWidth: 34, alignment: .trailing)
+            }
+        }
+        .contentShape(Rectangle())
+        .help(Theme.estimatedTooltip)
     }
 }
