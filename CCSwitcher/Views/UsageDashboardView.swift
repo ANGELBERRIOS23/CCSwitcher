@@ -238,7 +238,7 @@ struct UsageDashboardView: View {
         VStack(alignment: .leading, spacing: 12) {
             accountHeader(account)
             if let usage = usage {
-                usageBars(usage)
+                usageBars(usage, account: account)
                 extraUsageRow(usage.extraUsage)
                 sampleAgeLabel(account)
             } else if let errorState = appState.accountUsageErrors[account.id] {
@@ -350,7 +350,7 @@ struct UsageDashboardView: View {
     }
 
     @ViewBuilder
-    private func usageBars(_ usage: UsageAPIResponse) -> some View {
+    private func usageBars(_ usage: UsageAPIResponse, account: Account) -> some View {
         if let session = usage.fiveHour {
             usageRow(
                 label: Text("Session"),
@@ -360,7 +360,7 @@ struct UsageDashboardView: View {
                 kind: .session
             )
         }
-        if let weekly = usage.sevenDay {
+        if let weekly = usage.sevenDay, !usage.lacksWeeklyLimit {
             usageRow(
                 label: Text("Weekly"),
                 resetText: weekly.resetTimeString,
@@ -368,6 +368,9 @@ struct UsageDashboardView: View {
                 elapsed: weekly.elapsedPercent(windowSeconds: RateLimitWindow.sevenDaySeconds),
                 kind: .weekly
             )
+        }
+        if let estimate = appState.weeklyEstimate(for: account) {
+            estimatedWeeklyRow(estimate, account: account)
         }
         // The weekly limit scoped to one model. The server names the model, so
         // the label is verbatim rather than a localized key.
@@ -434,5 +437,38 @@ struct UsageDashboardView: View {
 
             GlowBar(fraction: utilization / 100, color: fillColor, marker: elapsed.map { $0 / 100 })
         }
+    }
+
+    /// Fork-only: the weekly bar of an account whose usage has no weekly
+    /// percentage, estimated from its 5-hour sessions. Its own color and the
+    /// "≈" set it apart from the real bars.
+    private func estimatedWeeklyRow(_ estimate: WeeklyEstimate.Result, account: Account) -> some View {
+        let color = estimate.percent >= 90 ? Theme.danger : Theme.estimated
+
+        return VStack(spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("Weekly (estimated)")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Theme.estimated)
+                    .lineLimit(1)
+                Spacer()
+                if let resetText = estimate.resetText {
+                    Text("Resets in \(resetText)")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.dim)
+                }
+                WeeklyResetMenu(account: account, week: estimate.week)
+                Text(estimate.percentText)
+                    .font(.system(size: 13, weight: .semibold, design: panelStyle.numberDesign).monospacedDigit())
+                    .foregroundStyle(color)
+                    .contentTransition(.numericText(value: estimate.percent))
+                    .animation(Theme.spring, value: estimate.percent)
+                    .frame(minWidth: 36, alignment: .trailing)
+            }
+
+            GlowBar(fraction: estimate.percent / 100, color: color, marker: estimate.elapsedPercent / 100)
+        }
+        .contentShape(Rectangle())
+        .help(Theme.estimatedTooltip)
     }
 }

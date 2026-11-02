@@ -12,7 +12,12 @@ final class AppState: ObservableObject {
 
     @Published var accounts: [Account] = []
     @Published var activeAccount: Account?
-    @Published var accountUsage: [UUID: UsageAPIResponse] = [:]
+    @Published var accountUsage: [UUID: UsageAPIResponse] = [:] {
+        didSet { recordWeeklyEstimates() }
+    }
+    /// 5-hour session peaks and reset choices behind the estimated weekly bar
+    /// of accounts without a weekly limit (fork-only).
+    @Published private(set) var weeklyEstimates = WeeklyEstimateBook.load()
     /// When each account's usage sample was actually taken. Accounts are polled
     /// round-robin (active + one other per cycle), so a card can be showing a
     /// reading several cycles old; without this the UI would render a stale
@@ -1472,6 +1477,38 @@ final class AppState: ObservableObject {
             accountUsageSampledAt[account.id] = nil
             accountUsageErrors[account.id] = UsageErrorState(isExpired: false, isRateLimited: false, message: String(localized: "Could not fetch usage: \(error.localizedDescription)", bundle: L10n.bundle))
         }
+    }
+
+    // MARK: - Weekly estimate (fork-only)
+
+    /// Accounts whose usage shape was already logged this launch.
+    private var loggedWeeklyShape: Set<UUID> = []
+
+    private func recordWeeklyEstimates() {
+        var book = weeklyEstimates
+        var changed = false
+        for (id, usage) in accountUsage {
+            if book.record(usage, for: id) { changed = true }
+            if usage.lacksWeeklyLimit, loggedWeeklyShape.insert(id).inserted {
+                let kinds = (usage.limits ?? []).map { "\($0.kind ?? "?")(\($0.resetsAt == nil ? "no reset" : "reset"))" }
+                log.info("[weeklyEstimate] \(id.uuidString.prefix(8)): no weekly percentage; seven_day=\(usage.sevenDay == nil ? "null" : "no utilization"), limits=\(kinds)")
+            }
+        }
+        guard changed else { return }
+        weeklyEstimates = book
+        book.save()
+    }
+
+    /// The estimated weekly bar for an account whose usage has no weekly
+    /// percentage; nil for every other account.
+    func weeklyEstimate(for account: Account) -> WeeklyEstimate.Result? {
+        guard let usage = accountUsage[account.id], usage.lacksWeeklyLimit else { return nil }
+        return weeklyEstimates.estimate(for: account.id, usage: usage)
+    }
+
+    func chooseWeeklyReset(for account: Account, weekday: Int, hour: Int) {
+        weeklyEstimates.choose(weekday: weekday, hour: hour, for: account.id)
+        weeklyEstimates.save()
     }
 
     // MARK: - Diagnostics

@@ -236,3 +236,10 @@
 "Could not save %@'s current sign-in, so the switch was stopped before changing anything. Try again." = "No se pudo guardar el inicio de sesión actual de %@, así que el cambio se detuvo antes de modificar nada. Inténtalo de nuevo.";
 "Claude CLI did not respond in time." = "Claude CLI no respondió a tiempo.";
 "Refresh this account's usage" = "Actualizar el uso de esta cuenta";
+/* Fork-only: estimated weekly bar for accounts without a weekly limit */
+"Weekly (estimated)" = "Semanal (estimado)";
+"Reset day" = "Día de reinicio";
+"Reset hour" = "Hora de reinicio";
+"Pick the day and hour this account's week resets (Monday 00:00 until you do)" = "Elige el día y la hora en que se reinicia la semana de esta cuenta (mientras no lo elijas, se usa el lunes a las 0:00)";
+"Day and hour this account's week resets" = "Día y hora en que se reinicia la semana de esta cuenta";
+"Estimate: this account reports no weekly limit. Each full 5-hour session counts as about 13 percent of the week, and only sessions CCSwitcher saw while open are counted. The line marks how much of the week has gone by: stay at or behind it to last the week." = "Estimado: esta cuenta no muestra límite semanal. Cada sesión de 5 horas llena cuenta como un 13 por ciento de la semana, y solo se cuentan las sesiones que CCSwitcher vio mientras estaba abierto. La rayita marca cuánto de la semana ya pasó: si la barra no la pasa, te alcanza para toda la semana.";

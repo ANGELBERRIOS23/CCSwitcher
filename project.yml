@@ -143,6 +143,7 @@ targets:
       - path: CCSwitcher/Services/KeychainService.swift
       - path: CCSwitcher/Models/Account.swift
       - path: CCSwitcher/Models/UsageData.swift
+      - path: CCSwitcher/Models/WeeklyEstimate.swift
       - path: CCSwitcher/Models/String+Obfuscation.swift
     dependencies:
       - package: GRDB

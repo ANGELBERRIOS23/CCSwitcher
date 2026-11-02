@@ -243,3 +243,10 @@
 "Could not save %@'s current sign-in, so the switch was stopped before changing anything. Try again." = "Could not save %@'s current sign-in, so the switch was stopped before changing anything. Try again.";
 "Claude CLI did not respond in time." = "Claude CLI did not respond in time.";
 "Refresh this account's usage" = "Refresh this account's usage";
+/* Fork-only: estimated weekly bar for accounts without a weekly limit */
+"Weekly (estimated)" = "Weekly (estimated)";
+"Reset day" = "Reset day";
+"Reset hour" = "Reset hour";
+"Pick the day and hour this account's week resets (Monday 00:00 until you do)" = "Pick the day and hour this account's week resets (Monday 00:00 until you do)";
+"Day and hour this account's week resets" = "Day and hour this account's week resets";
+"Estimate: this account reports no weekly limit. Each full 5-hour session counts as about 13 percent of the week, and only sessions CCSwitcher saw while open are counted. The line marks how much of the week has gone by: stay at or behind it to last the week." = "Estimate: this account reports no weekly limit. Each full 5-hour session counts as about 13 percent of the week, and only sessions CCSwitcher saw while open are counted. The line marks how much of the week has gone by: stay at or behind it to last the week.";
