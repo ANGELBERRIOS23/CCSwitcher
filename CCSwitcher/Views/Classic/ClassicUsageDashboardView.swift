@@ -440,6 +440,10 @@ struct ClassicUsageDashboardView: View {
                     .lineLimit(1)
                     .frame(minWidth: 34, alignment: .trailing)
             }
+
+            EstimatedWeeklyDetail(estimate: estimate)
+                .font(.caption2)
+                .foregroundStyle(.textSecondary)
         }
         .contentShape(Rectangle())
         .help(Theme.estimatedTooltip)

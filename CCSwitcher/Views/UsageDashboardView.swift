@@ -451,6 +451,10 @@ struct UsageDashboardView: View {
             }
 
             GlowBar(fraction: estimate.percent / 100, color: color, marker: estimate.elapsedPercent / 100)
+
+            EstimatedWeeklyDetail(estimate: estimate)
+                .font(.caption2)
+                .foregroundStyle(Theme.dim)
         }
         .contentShape(Rectangle())
         .help(Theme.estimatedTooltip)

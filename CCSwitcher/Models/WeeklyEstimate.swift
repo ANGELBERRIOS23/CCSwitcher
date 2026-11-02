@@ -52,6 +52,9 @@ enum WeeklyEstimate {
         let elapsedPercent: Double
         /// 5-hour sessions counted this week.
         let sessions: Int
+        /// What the 5-hour session in progress adds to the week, 0–13; nil
+        /// when none is running.
+        let currentSessionPercent: Double?
     }
 }
 
@@ -128,7 +131,8 @@ struct WeeklyEstimateBook: Codable, Equatable {
 
     func estimate(for account: UUID, usage: UsageAPIResponse, now: Date = Date(), calendar: Calendar = .current) -> WeeklyEstimate.Result {
         let week = week(for: account, usage: usage, now: now, calendar: calendar)
-        let peaks = (entries[account.uuidString]?.sessionPeaks ?? [:]).compactMap { key, peak -> Double? in
+        let sessionPeaks = entries[account.uuidString]?.sessionPeaks ?? [:]
+        let peaks = sessionPeaks.compactMap { key, peak -> Double? in
             guard let seconds = Double(key) else { return nil }
             let reset = Date(timeIntervalSince1970: seconds)
             // Every session that ran during this week, the current one too.
@@ -136,11 +140,18 @@ struct WeeklyEstimateBook: Codable, Equatable {
                   reset.addingTimeInterval(-RateLimitWindow.fiveHourSeconds) < week.end else { return nil }
             return peak
         }
+        var current: Double?
+        if let reset = usage.fiveHour?.resetsAtDate, reset > now {
+            let seconds = Int(reset.timeIntervalSince1970.rounded())
+            current = sessionPeaks.first { abs((Int($0.key) ?? 0) - seconds) <= 300 }
+                .map { $0.value * WeeklyEstimate.weeklySharePerSession }
+        }
         let elapsed = 1 - week.end.timeIntervalSince(now) / RateLimitWindow.sevenDaySeconds
         return .init(percent: peaks.reduce(0, +) * WeeklyEstimate.weeklySharePerSession,
                      week: week,
                      elapsedPercent: min(max(elapsed, 0), 1) * 100,
-                     sessions: peaks.count)
+                     sessions: peaks.count,
+                     currentSessionPercent: current)
     }
 
     // MARK: - File

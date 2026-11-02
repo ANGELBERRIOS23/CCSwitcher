@@ -70,6 +70,7 @@ final class WeeklyEstimateTests: XCTestCase {
         let estimate = book.estimate(for: account, usage: current, now: now, calendar: calendar)
         XCTAssertEqual(estimate.sessions, 3)
         XCTAssertEqual(estimate.percent, 32.5, accuracy: 0.001)
+        XCTAssertEqual(estimate.currentSessionPercent ?? -1, 6.5, accuracy: 0.001)
         XCTAssertEqual(estimate.week.source, .chosen)
         XCTAssertEqual(estimate.week.end, calendar.date(from: DateComponents(year: 2027, month: 1, day: 21, hour: 15)))
     }
@@ -105,6 +106,7 @@ final class WeeklyEstimateTests: XCTestCase {
         let estimate = book.estimate(for: account, usage: try usage(session: 0), now: now, calendar: calendar)
         XCTAssertEqual(estimate.elapsedPercent, 50, accuracy: 0.001)
         XCTAssertEqual(estimate.percent, 0)
+        XCTAssertNil(estimate.currentSessionPercent)
     }
 
     func testOldSessionsAreDropped() throws {

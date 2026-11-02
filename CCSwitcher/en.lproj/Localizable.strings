@@ -247,3 +247,5 @@
 "Pick the day and hour this account's week resets (Monday 00:00 until you do)" = "Pick the day and hour this account's week resets (Monday 00:00 until you do)";
 "Day and hour this account's week resets" = "Day and hour this account's week resets";
 "Estimate: this account reports no weekly limit. Each full 5-hour session counts as about 13 percent of the week, and only sessions CCSwitcher saw while open are counted. The line marks how much of the week has gone by: stay at or behind it to last the week." = "Estimate: this account reports no weekly limit. Each full 5-hour session counts as about 13 percent of the week, and only sessions CCSwitcher saw while open are counted. The line marks how much of the week has gone by: stay at or behind it to last the week.";
+"5-hour sessions this week: %lld · current adds %@" = "5-hour sessions this week: %lld · current adds %@";
+"5-hour sessions this week: %lld" = "5-hour sessions this week: %lld";
