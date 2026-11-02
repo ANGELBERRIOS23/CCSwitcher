@@ -10,9 +10,10 @@ extension Theme {
 }
 
 extension WeeklyEstimate.Result {
-    /// "≈ 23%", so it never reads like a real percentage.
+    /// "≈ 3.8%", so it never reads like a real percentage. One decimal: a
+    /// whole 5-hour session moves it only 13 points.
     var percentText: String {
-        "≈ " + Formatted.percent(percent, locale: L10n.locale)
+        "≈ " + (percent / 100).formatted(.percent.precision(.fractionLength(0...1)).locale(L10n.locale))
     }
 
     /// Same countdown wording as the other rows ("Thu 3:00 PM", "5 hr 3 min").
